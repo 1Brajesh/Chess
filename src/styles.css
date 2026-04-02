@@ -279,11 +279,11 @@ button {
 }
 
 .board-square.light {
-  background: transparent;
+  background: var(--board-light-bg);
 }
 
 .board-square.dark {
-  background: transparent;
+  background: var(--board-dark-bg);
 }
 
 .board-style-walnut {
