@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import {
   FaChessBishop,
   FaChessKing,
@@ -83,14 +84,25 @@ export default function ChessPiece({
   pieceStyle = DEFAULT_PIECE_STYLE,
   className = '',
 }) {
+  const [imageFailed, setImageFailed] = useState(false);
+
+  const resolvedStyle = normalizePieceStyle(pieceStyle);
+  const colorClass = piece?.startsWith('w') ? 'white' : 'black';
+  const imageSource = piece ? IMAGE_BY_PIECE[piece] : null;
+  const Icon =
+    piece && resolvedStyle === 'staunton'
+      ? ICONS_BY_STYLE.classic[piece[1]]
+      : piece
+        ? ICONS_BY_STYLE[resolvedStyle][piece[1]]
+        : null;
+
+  useEffect(() => {
+    setImageFailed(false);
+  }, [imageSource, resolvedStyle]);
+
   if (!piece || piece === 'erase') {
     return null;
   }
-
-  const resolvedStyle = normalizePieceStyle(pieceStyle);
-  const colorClass = piece.startsWith('w') ? 'white' : 'black';
-  const Icon = ICONS_BY_STYLE[resolvedStyle]?.[piece[1]];
-  const imageSource = IMAGE_BY_PIECE[piece];
 
   return (
     <span
@@ -103,13 +115,14 @@ export default function ChessPiece({
         .filter(Boolean)
         .join(' ')}
     >
-      {resolvedStyle === 'staunton' ? (
+      {resolvedStyle === 'staunton' && imageSource && !imageFailed ? (
         <img
           src={imageSource}
           className="piece-image"
           alt=""
           aria-hidden="true"
           draggable="false"
+          onError={() => setImageFailed(true)}
         />
       ) : (
         <Icon className="piece-icon" aria-hidden="true" focusable="false" />

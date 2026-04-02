@@ -1,41 +1,31 @@
-<!DOCTYPE html>
-<html lang="en">
-<meta charset="utf-8">
-<title>Wikimedia Error</title>
-<style>
-* { margin: 0; padding: 0; }
-body { background: #fff; font: 15px/1.6 sans-serif; color: #333; }
-.content { margin: 7% auto 0; padding: 2em 1em 1em; max-width: 640px; display: flex; flex-direction: row; flex-wrap: wrap; }
-.footer { clear: both; margin-top: 14%; border-top: 1px solid #e5e5e5; background: #f9f9f9; padding: 2em 0; font-size: 0.8em; text-align: center; }
-img { margin: 0 2em 2em 0; }
-a img { border: 0; }
-h1 { margin-top: 1em; font-size: 1.2em; }
-.content-text { flex: 1; }
-p { margin: 0.7em 0 1em 0; }
-a { color: #0645ad; text-decoration: none; }
-a:hover { text-decoration: underline; }
-code { font-family: sans-serif; }
-summary { font-weight: bold; cursor: pointer; }
-details[open] { background: #970302; color: #dfdedd; }
-.text-muted { color: #777; }
-@media (prefers-color-scheme: dark) {
-  a { color: #9e9eff; }
-  body { background: transparent; color: #ddd; }
-  .footer { border-top: 1px solid #444; background: #060606; }
-  #logo { filter: invert(1) hue-rotate(180deg); }
-  .text-muted { color: #888; }
-}
-</style>
-<meta name="color-scheme" content="light dark">
-<div class="content" role="main">
-<a href="https://www.wikimedia.org"><img id="logo" src="https://www.wikimedia.org/static/images/wmf-logo.png" srcset="https://www.wikimedia.org/static/images/wmf-logo-2x.png 2x" alt="Wikimedia" width="135" height="101">
-</a>
-<div class="content-text">
-<h1>Error</h1>
-
-<p>Please set a proper user-agent and respect our robot policy https://w.wiki/4wJS. See also https://phabricator.wikimedia.org/T400119</p>
-</div>
-</div>
-<div class="footer"><p>If you report this error to the Wikimedia System Administrators, please include the details below.</p><p class="text-muted"><code>Request served via cp1101 cp1101, Varnish XID 889000916<br>Upstream caches: cp1101 int<br>Error: 429, Please set a proper user-agent and respect our robot policy https://w.wiki/4wJS. See also https://phabricator.wikimedia.org/T400119 at Thu, 02 Apr 2026 02:31:22 GMT<br><details><summary>Sensitive client information</summary>IP address: 134.56.184.150</details></code></p>
-</div>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg xmlns="http://www.w3.org/2000/svg" version="1.1" width="45" height="45">
+  <g
+    style="opacity:1; fill:none; fill-opacity:1; fill-rule:evenodd; stroke:#000000; stroke-width:1.5; stroke-linecap:round; stroke-linejoin:round; stroke-miterlimit:4; stroke-dasharray:none; stroke-opacity:1;"
+    transform="translate(0,0.3)"
+  >
+    <path
+      d="M 22,10 C 32.5,11 38.5,18 38,39 L 15,39 C 15,30 25,32.5 23,18"
+      style="fill:#000000; stroke:#000000;"
+    />
+    <path
+      d="M 24,18 C 24.38,20.91 18.45,25.37 16,27 C 13,29 13.18,31.34 11,31 C 9.958,30.06 12.41,27.96 11,28 C 10,28 11.19,29.23 10,30 C 9,30 5.997,31 6,26 C 6,24 12,14 12,14 C 12,14 13.89,12.1 14,10.5 C 13.27,9.506 13.5,8.5 13.5,7.5 C 14.5,6.5 16.5,10 16.5,10 L 18.5,10 C 18.5,10 19.28,8.008 21,7 C 22,7 22,10 22,10"
+      style="fill:#000000; stroke:#000000;"
+    />
+    <path
+      d="M 9.5 25.5 A 0.5 0.5 0 1 1 8.5,25.5 A 0.5 0.5 0 1 1 9.5 25.5 z"
+      style="fill:#ffffff; stroke:#ffffff;"
+    />
+    <path
+      d="M 15 15.5 A 0.5 1.5 0 1 1 14,15.5 A 0.5 1.5 0 1 1 15 15.5 z"
+      transform="matrix(0.866,0.5,-0.5,0.866,9.693,-5.173)"
+      style="fill:#ffffff; stroke:#ffffff;"
+    />
+    <path
+      d="M 24.55,10.4 C 27.3,11.45 29.95,13.35 32.45,18.1 C 34.45,21.9 35.45,28.3 35.05,39"
+      style="fill:none; stroke:#ffffff;"
+    />
+  </g>
+</svg>
 </html>
