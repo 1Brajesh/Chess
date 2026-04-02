@@ -627,12 +627,7 @@ export default function App() {
                       ].join(' ')}
                       aria-hidden="true"
                     >
-                      <span className="board-style-preview-frame">
-                        <span className="board-style-swatch light" />
-                        <span className="board-style-swatch dark" />
-                        <span className="board-style-swatch dark" />
-                        <span className="board-style-swatch light" />
-                      </span>
+                      <span className="board-style-preview-frame" />
                     </span>
                     <span className="piece-style-copy">
                       <strong>{option.label}</strong>

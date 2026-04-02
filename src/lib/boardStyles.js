@@ -4,7 +4,7 @@ export const BOARD_STYLE_OPTIONS = [
   {
     value: 'walnut',
     label: 'Walnut',
-    description: 'Warm maple and walnut tournament board',
+    description: 'Warm maple and walnut tournament wood',
   },
   {
     value: 'rosewood',
@@ -12,9 +12,9 @@ export const BOARD_STYLE_OPTIONS = [
     description: 'Richer red-brown luxury wood finish',
   },
   {
-    value: 'slate',
-    label: 'Slate',
-    description: 'Dark stone board with pale ivory squares',
+    value: 'ebony',
+    label: 'Ebony',
+    description: 'High-contrast ebony and ivory wood set',
   },
 ];
 
@@ -25,4 +25,3 @@ const BOARD_STYLE_SET = new Set(
 export function normalizeBoardStyle(candidate) {
   return BOARD_STYLE_SET.has(candidate) ? candidate : DEFAULT_BOARD_STYLE;
 }
-
