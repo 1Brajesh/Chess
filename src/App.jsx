@@ -18,7 +18,6 @@ import {
   normalizeSetupState,
   parseFen,
   safeValidateFen,
-  serializeGameSummary,
 } from './lib/chess.js';
 import ChessPiece from './components/ChessPiece.jsx';
 import {
@@ -132,7 +131,6 @@ function createSaveId() {
 function CapturedTray({
   lossColor,
   pieces,
-  lead,
   pieceStyle,
   animatedCapture,
 }) {
@@ -140,10 +138,6 @@ function CapturedTray({
 
   return (
     <div className="captured-tray" aria-label={`${label} pieces`}>
-      <div className="captured-tray-meta">
-        <span className="captured-tray-label">{label}</span>
-        {lead > 0 ? <span className="captured-score">+{lead}</span> : null}
-      </div>
       <div className="captured-piece-list">
         {pieces.length === 0 ? (
           <span className="captured-empty">No captures</span>
@@ -171,6 +165,46 @@ function CapturedTray({
           ))
         )}
       </div>
+    </div>
+  );
+}
+
+function PlayerRailSlot({
+  color,
+  activeColor,
+  mode,
+  lead,
+  inCheck,
+}) {
+  const isActive = color === activeColor;
+  const label = color === 'w' ? 'White' : 'Black';
+  const note = isActive
+    ? mode === 'game'
+      ? inCheck
+        ? 'To move · Check'
+        : 'To move'
+      : 'Setup turn'
+    : mode === 'game'
+      ? 'Waiting'
+      : 'Standby';
+
+  return (
+    <div
+      className={[
+        'player-rail-slot',
+        color === 'w' ? 'white-side' : 'black-side',
+        isActive ? 'active' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
+    >
+      <div className="player-rail-copy">
+        <span className="player-rail-name">{label}</span>
+        <span className="player-rail-note">{note}</span>
+      </div>
+      {mode === 'game' && lead > 0 ? (
+        <span className="player-rail-score">+{lead}</span>
+      ) : null}
     </div>
   );
 }
@@ -205,20 +239,13 @@ export default function App() {
   const materialBalance = getMaterialBalance(capturedPieces);
   const topCaptureColor = orientation === 'w' ? 'b' : 'w';
   const bottomCaptureColor = orientation === 'w' ? 'w' : 'b';
+  const activeTurnColor = mode === 'game' ? chess.turn() : setupState.turn;
   const legalTargets =
     mode === 'game' && selectedSquare
       ? getMoveChoices(chess, selectedSquare).map((move) => move.to)
       : [];
   const setupFen = boardMapToFen(setupState.position, setupState.turn);
   const setupValidation = safeValidateFen(setupFen);
-  const statusText =
-    mode === 'game'
-      ? serializeGameSummary(chess)
-      : `Setup mode. ${
-          setupValidation.valid
-            ? 'Position can start a game.'
-            : 'Position needs both kings and a valid layout.'
-        }`;
   const boardPerspective =
     orientation === 'w' ? 'White pieces at bottom' : 'Black pieces at bottom';
   const activePieceStyleLabel =
@@ -539,13 +566,7 @@ export default function App() {
   return (
     <div className="app-shell">
       <header className="hero">
-        <div>
-          <p className="eyebrow">Client-Side Chess Board</p>
-        </div>
-        <div className="hero-status">
-          <span className={`mode-pill ${mode}`}>{mode === 'game' ? 'Game mode' : 'Setup mode'}</span>
-          <p>{statusText}</p>
-        </div>
+        <p className="eyebrow">Client-Side Chess Board</p>
       </header>
 
       <main className="layout">
@@ -559,7 +580,7 @@ export default function App() {
                 <span className="board-chip">
                   {mode === 'game'
                     ? `${moveList.length} move${moveList.length === 1 ? '' : 's'} recorded`
-                    : `${setupState.turn === 'w' ? 'White' : 'Black'} to move`}
+                    : `${Object.keys(setupState.position).length} pieces on board`}
                 </span>
                 <span className="board-chip">{activeBoardStyleLabel} board</span>
                 <span className="board-chip">{activePieceStyleLabel} pieces</span>
@@ -576,78 +597,106 @@ export default function App() {
             </button>
           </div>
 
-          {mode === 'game' ? (
-            <CapturedTray
-              lossColor={topCaptureColor}
-              pieces={capturedPieces[topCaptureColor]}
-              lead={materialBalance[topCaptureColor]}
-              pieceStyle={pieceStyle}
-              animatedCapture={captureAnimation}
-            />
-          ) : null}
+          <div className="board-stage">
+            <aside className="player-rail" aria-label="Player status">
+              <PlayerRailSlot
+                color={topCaptureColor}
+                activeColor={activeTurnColor}
+                mode={mode}
+                lead={materialBalance[topCaptureColor]}
+                inCheck={
+                  mode === 'game' &&
+                  chess.inCheck() &&
+                  activeTurnColor === topCaptureColor
+                }
+              />
+              <div className="player-rail-line" aria-hidden="true" />
+              <PlayerRailSlot
+                color={bottomCaptureColor}
+                activeColor={activeTurnColor}
+                mode={mode}
+                lead={materialBalance[bottomCaptureColor]}
+                inCheck={
+                  mode === 'game' &&
+                  chess.inCheck() &&
+                  activeTurnColor === bottomCaptureColor
+                }
+              />
+            </aside>
 
-          <div className={['board-frame', `board-style-${boardStyle}`].join(' ')}>
-            <div className="board-grid" role="grid" aria-label="Chess board">
-              {boardRows.map((row, rowIndex) =>
-                row.map((square, columnIndex) => {
-                  const piece = boardState.position[square];
-                  const isSelected = selectedSquare === square;
-                  const isTarget = legalTargets.includes(square);
-                  const isLastMoveSquare =
-                    lastMove &&
-                    (lastMove.from === square || lastMove.to === square);
-                  const rankLabel = columnIndex === 0 ? square[1] : '';
-                  const fileLabel =
-                    rowIndex === boardRows.length - 1 ? square[0] : '';
+            <div className="board-stack">
+              {mode === 'game' ? (
+                <CapturedTray
+                  lossColor={topCaptureColor}
+                  pieces={capturedPieces[topCaptureColor]}
+                  pieceStyle={pieceStyle}
+                  animatedCapture={captureAnimation}
+                />
+              ) : null}
 
-                  return (
-                    <button
-                      key={square}
-                      type="button"
-                      className={[
-                        'board-square',
-                        isLightSquare(square) ? 'light' : 'dark',
-                        isSelected ? 'selected' : '',
-                        isTarget ? 'target' : '',
-                        isLastMoveSquare ? 'last-move' : '',
-                      ]
-                        .filter(Boolean)
-                        .join(' ')}
-                      onClick={() => handleSquareClick(square)}
-                      onDragOver={(event) => event.preventDefault()}
-                      onDrop={() => handleDrop(square)}
-                      draggable={mode === 'game' && Boolean(piece)}
-                      onDragStart={() => handleDragStart(square)}
-                      onDragEnd={() => setDragSquare(null)}
-                      aria-label={`${square} ${
-                        piece ? PIECE_LABELS[piece] : 'empty square'
-                      }`}
-                    >
-                      {rankLabel ? (
-                        <span className="square-rank">{rankLabel}</span>
-                      ) : null}
-                      {fileLabel ? (
-                        <span className="square-file">{fileLabel}</span>
-                      ) : null}
-                      {piece ? (
-                        <ChessPiece piece={piece} pieceStyle={pieceStyle} />
-                      ) : null}
-                    </button>
-                  );
-                }),
-              )}
+              <div className={['board-frame', `board-style-${boardStyle}`].join(' ')}>
+                <div className="board-grid" role="grid" aria-label="Chess board">
+                  {boardRows.map((row, rowIndex) =>
+                    row.map((square, columnIndex) => {
+                      const piece = boardState.position[square];
+                      const isSelected = selectedSquare === square;
+                      const isTarget = legalTargets.includes(square);
+                      const isLastMoveSquare =
+                        lastMove &&
+                        (lastMove.from === square || lastMove.to === square);
+                      const rankLabel = columnIndex === 0 ? square[1] : '';
+                      const fileLabel =
+                        rowIndex === boardRows.length - 1 ? square[0] : '';
+
+                      return (
+                        <button
+                          key={square}
+                          type="button"
+                          className={[
+                            'board-square',
+                            isLightSquare(square) ? 'light' : 'dark',
+                            isSelected ? 'selected' : '',
+                            isTarget ? 'target' : '',
+                            isLastMoveSquare ? 'last-move' : '',
+                          ]
+                            .filter(Boolean)
+                            .join(' ')}
+                          onClick={() => handleSquareClick(square)}
+                          onDragOver={(event) => event.preventDefault()}
+                          onDrop={() => handleDrop(square)}
+                          draggable={mode === 'game' && Boolean(piece)}
+                          onDragStart={() => handleDragStart(square)}
+                          onDragEnd={() => setDragSquare(null)}
+                          aria-label={`${square} ${
+                            piece ? PIECE_LABELS[piece] : 'empty square'
+                          }`}
+                        >
+                          {rankLabel ? (
+                            <span className="square-rank">{rankLabel}</span>
+                          ) : null}
+                          {fileLabel ? (
+                            <span className="square-file">{fileLabel}</span>
+                          ) : null}
+                          {piece ? (
+                            <ChessPiece piece={piece} pieceStyle={pieceStyle} />
+                          ) : null}
+                        </button>
+                      );
+                    }),
+                  )}
+                </div>
+              </div>
+
+              {mode === 'game' ? (
+                <CapturedTray
+                  lossColor={bottomCaptureColor}
+                  pieces={capturedPieces[bottomCaptureColor]}
+                  pieceStyle={pieceStyle}
+                  animatedCapture={captureAnimation}
+                />
+              ) : null}
             </div>
           </div>
-
-          {mode === 'game' ? (
-            <CapturedTray
-              lossColor={bottomCaptureColor}
-              pieces={capturedPieces[bottomCaptureColor]}
-              lead={materialBalance[bottomCaptureColor]}
-              pieceStyle={pieceStyle}
-              animatedCapture={captureAnimation}
-            />
-          ) : null}
 
           <div className="board-actions">
             <button className="primary-button" type="button" onClick={startNewGame}>
