@@ -30,6 +30,14 @@ def mix_color(dark: tuple[int, int, int], light: tuple[int, int, int], tone: flo
     return tuple(int(lerp(dark[index], light[index], tone)) for index in range(3))
 
 
+def blend_color(
+    source: tuple[int, int, int],
+    target: tuple[int, int, int],
+    amount: float,
+) -> tuple[int, int, int]:
+    return tuple(int(lerp(source[index], target[index], amount)) for index in range(3))
+
+
 class ValueNoise:
     def __init__(self, width: int, height: int, cell_size: int, seed: int) -> None:
         self.cell_size = cell_size
@@ -113,6 +121,61 @@ def wood_patch(
     return rows
 
 
+def marble_patch(
+    size: int,
+    seed: int,
+    dark: tuple[int, int, int],
+    light: tuple[int, int, int],
+    vein: tuple[int, int, int],
+    angle: float,
+    contrast: float = 1.0,
+) -> list[list[tuple[int, int, int]]]:
+    noise_fields = create_noise_stack(size, size, seed)
+    rows: list[list[tuple[int, int, int]]] = []
+    cos_angle = math.cos(angle)
+    sin_angle = math.sin(angle)
+
+    for y in range(size):
+        row: list[tuple[int, int, int]] = []
+        for x in range(size):
+            centered_x = x - size / 2
+            centered_y = y - size / 2
+            u = centered_x * cos_angle - centered_y * sin_angle + size / 2
+            v = centered_x * sin_angle + centered_y * cos_angle + size / 2
+
+            cloud = (
+                noise_fields[0].sample(u, v) * 0.4
+                + noise_fields[1].sample(u * 1.1, v * 1.05) * 0.25
+                + noise_fields[2].sample(u * 1.4, v * 1.2) * 0.2
+                + noise_fields[3].sample(u * 1.8, v * 1.8) * 0.15
+            )
+            cloud = clamp((cloud - 0.5) * contrast + 0.5)
+
+            warp = (noise_fields[0].sample(v * 0.8 + 19.0, u * 0.7 + 11.0) - 0.5) * 48.0
+            warp += (noise_fields[1].sample(u * 0.6, v * 1.3) - 0.5) * 22.0
+            vein_wave = abs(
+                math.sin((u + warp) / 15.0 + noise_fields[2].sample(u * 0.9, v * 0.9) * 7.0)
+            )
+            vein_strength = clamp((vein_wave - 0.78) / 0.22)
+            hairline = clamp((noise_fields[4].sample(u * 2.1, v * 2.2) - 0.72) / 0.28)
+
+            sparkle = (noise_fields[3].sample(v * 0.6 + 13.0, u * 0.5 + 7.0) - 0.5) * 0.08
+            tone = clamp(cloud + sparkle)
+            color = mix_color(dark, light, tone)
+
+            if vein_strength > 0:
+                color = blend_color(color, vein, vein_strength * 0.82)
+
+            if hairline > 0:
+                shadow_amount = 0.12 * hairline
+                color = tuple(int(channel * (1.0 - shadow_amount)) for channel in color)
+
+            row.append(color)
+        rows.append(row)
+
+    return rows
+
+
 def add_vignette(
     pixels: list[list[tuple[int, int, int]]],
     strength: float,
@@ -135,6 +198,9 @@ def add_vignette(
 
 
 def board_image(style: dict[str, tuple[int, int, int] | int]) -> list[list[tuple[int, int, int]]]:
+    if style.get("kind") == "marble":
+        return marble_board_image(style)
+
     pixels = [[(0, 0, 0) for _ in range(BOARD_SIZE)] for _ in range(BOARD_SIZE)]
     seed_base = int(style["seed"])
 
@@ -165,6 +231,9 @@ def board_image(style: dict[str, tuple[int, int, int] | int]) -> list[list[tuple
 
 
 def frame_image(style: dict[str, tuple[int, int, int] | int]) -> list[list[tuple[int, int, int]]]:
+    if style.get("kind") == "marble":
+        return marble_frame_image(style)
+
     dark, light = style["frame"]
     pixels = wood_patch(
         FRAME_SIZE,
@@ -176,6 +245,50 @@ def frame_image(style: dict[str, tuple[int, int, int] | int]) -> list[list[tuple
         shimmer=0.02,
     )
     return add_vignette(pixels, 0.18)
+
+
+def marble_board_image(style: dict[str, object]) -> list[list[tuple[int, int, int]]]:
+    pixels = [[(0, 0, 0) for _ in range(BOARD_SIZE)] for _ in range(BOARD_SIZE)]
+    seed_base = int(style["seed"])
+
+    for rank in range(SQUARE_COUNT):
+        for file in range(SQUARE_COUNT):
+            is_light = (rank + file) % 2 == 0
+            palette_key = "light" if is_light else "dark"
+            palette = style[palette_key]
+            local_seed = seed_base + rank * 41 + file * 19 + (0 if is_light else 701)
+            rng = random.Random(local_seed)
+            angle = rng.uniform(-0.22, 0.22)
+            patch = marble_patch(
+                SQUARE_SIZE,
+                local_seed,
+                palette["dark"],
+                palette["light"],
+                palette["vein"],
+                angle,
+                contrast=1.16 if is_light else 1.22,
+            )
+
+            base_y = rank * SQUARE_SIZE
+            base_x = file * SQUARE_SIZE
+            for py in range(SQUARE_SIZE):
+                pixels[base_y + py][base_x : base_x + SQUARE_SIZE] = patch[py]
+
+    return add_vignette(pixels, 0.06)
+
+
+def marble_frame_image(style: dict[str, object]) -> list[list[tuple[int, int, int]]]:
+    frame = style["frame"]
+    pixels = marble_patch(
+        FRAME_SIZE,
+        int(style["seed"]) + 1337,
+        frame["dark"],
+        frame["light"],
+        frame["vein"],
+        angle=0.08,
+        contrast=1.12,
+    )
+    return add_vignette(pixels, 0.16)
 
 
 def write_png(path: Path, pixels: list[list[tuple[int, int, int]]]) -> None:
@@ -223,6 +336,44 @@ STYLES = {
         "light": ((198, 180, 150), (247, 235, 214)),
         "dark": ((20, 18, 16), (66, 53, 41)),
         "frame": ((10, 10, 10), (56, 46, 37)),
+    },
+    "marble-mint": {
+        "kind": "marble",
+        "seed": 4417,
+        "light": {
+            "dark": (214, 218, 214),
+            "light": (250, 249, 245),
+            "vein": (184, 188, 183),
+        },
+        "dark": {
+            "dark": (163, 186, 175),
+            "light": (220, 234, 227),
+            "vein": (122, 146, 136),
+        },
+        "frame": {
+            "dark": (167, 150, 117),
+            "light": (223, 210, 177),
+            "vein": (132, 117, 90),
+        },
+    },
+    "marble-rose": {
+        "kind": "marble",
+        "seed": 5521,
+        "light": {
+            "dark": (220, 214, 214),
+            "light": (252, 248, 246),
+            "vein": (192, 182, 181),
+        },
+        "dark": {
+            "dark": (202, 170, 176),
+            "light": (236, 214, 220),
+            "vein": (164, 124, 132),
+        },
+        "frame": {
+            "dark": (175, 145, 129),
+            "light": (225, 199, 183),
+            "vein": (145, 109, 96),
+        },
     },
 }
 

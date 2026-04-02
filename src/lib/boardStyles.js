@@ -3,18 +3,43 @@ export const DEFAULT_BOARD_STYLE = 'walnut';
 export const BOARD_STYLE_OPTIONS = [
   {
     value: 'walnut',
-    label: 'Walnut',
-    description: 'Warm maple and walnut tournament wood',
+    label: 'Walnut Photo',
+    description: 'Photoreal maple and walnut wood board',
   },
   {
     value: 'rosewood',
-    label: 'Rosewood',
-    description: 'Richer red-brown luxury wood finish',
+    label: 'Rosewood Photo',
+    description: 'Photoreal red-brown luxury wood finish',
   },
   {
     value: 'ebony',
-    label: 'Ebony',
-    description: 'High-contrast ebony and ivory wood set',
+    label: 'Ebony Photo',
+    description: 'Photoreal ebony and ivory wood set',
+  },
+  {
+    value: 'marble-mint',
+    label: 'White + Green Marble',
+    description: 'Photoreal white marble and pale green marble',
+  },
+  {
+    value: 'marble-rose',
+    label: 'White + Pink Marble',
+    description: 'Photoreal white marble and soft pink marble',
+  },
+  {
+    value: 'walnut-classic',
+    label: 'Walnut Classic',
+    description: 'Original non-image walnut texture theme',
+  },
+  {
+    value: 'rosewood-classic',
+    label: 'Rosewood Classic',
+    description: 'Original non-image rosewood texture theme',
+  },
+  {
+    value: 'slate-classic',
+    label: 'Slate Classic',
+    description: 'Original non-image slate and ivory theme',
   },
 ];
 

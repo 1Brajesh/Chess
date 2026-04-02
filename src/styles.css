@@ -29,6 +29,9 @@
   --board-grid-shadow: rgba(66, 43, 25, 0.18);
   --board-grid-border: rgba(67, 43, 25, 0.18);
   --board-surface-bg: url('./assets/board-textures/walnut-board.png') center/cover no-repeat;
+  --board-preview-bg: var(--board-surface-bg);
+  --board-light-bg: transparent;
+  --board-dark-bg: transparent;
 }
 
 * {
@@ -293,6 +296,9 @@ button {
   --board-grid-shadow: rgba(66, 43, 25, 0.18);
   --board-grid-border: rgba(67, 43, 25, 0.18);
   --board-surface-bg: url('./assets/board-textures/walnut-board.png') center/cover no-repeat;
+  --board-preview-bg: var(--board-surface-bg);
+  --board-light-bg: transparent;
+  --board-dark-bg: transparent;
 }
 
 .board-style-rosewood {
@@ -305,6 +311,9 @@ button {
   --board-grid-shadow: rgba(65, 25, 24, 0.18);
   --board-grid-border: rgba(74, 27, 25, 0.2);
   --board-surface-bg: url('./assets/board-textures/rosewood-board.png') center/cover no-repeat;
+  --board-preview-bg: var(--board-surface-bg);
+  --board-light-bg: transparent;
+  --board-dark-bg: transparent;
 }
 
 .board-style-ebony {
@@ -317,6 +326,99 @@ button {
   --board-grid-shadow: rgba(28, 21, 16, 0.18);
   --board-grid-border: rgba(55, 43, 34, 0.18);
   --board-surface-bg: url('./assets/board-textures/ebony-board.png') center/cover no-repeat;
+  --board-preview-bg: var(--board-surface-bg);
+  --board-light-bg: transparent;
+  --board-dark-bg: transparent;
+}
+
+.board-style-marble-mint {
+  --board-frame-bg:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(0, 0, 0, 0.1)),
+    url('./assets/board-textures/marble-mint-frame.png') center/cover no-repeat;
+  --board-frame-highlight: rgba(255, 255, 255, 0.2);
+  --board-frame-shadow: rgba(81, 72, 58, 0.26);
+  --board-frame-border: rgba(255, 255, 255, 0.16);
+  --board-grid-shadow: rgba(110, 109, 96, 0.18);
+  --board-grid-border: rgba(159, 168, 160, 0.16);
+  --board-surface-bg: url('./assets/board-textures/marble-mint-board.png') center/cover no-repeat;
+  --board-preview-bg: var(--board-surface-bg);
+  --board-light-bg: transparent;
+  --board-dark-bg: transparent;
+}
+
+.board-style-marble-rose {
+  --board-frame-bg:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(0, 0, 0, 0.12)),
+    url('./assets/board-textures/marble-rose-frame.png') center/cover no-repeat;
+  --board-frame-highlight: rgba(255, 255, 255, 0.18);
+  --board-frame-shadow: rgba(95, 71, 63, 0.28);
+  --board-frame-border: rgba(255, 243, 240, 0.14);
+  --board-grid-shadow: rgba(116, 95, 92, 0.18);
+  --board-grid-border: rgba(177, 147, 150, 0.18);
+  --board-surface-bg: url('./assets/board-textures/marble-rose-board.png') center/cover no-repeat;
+  --board-preview-bg: var(--board-surface-bg);
+  --board-light-bg: transparent;
+  --board-dark-bg: transparent;
+}
+
+.board-style-walnut-classic {
+  --board-frame-bg: linear-gradient(135deg, #3f2616 0%, #6c4529 18%, #9a6a43 46%, #70492b 72%, #342012 100%);
+  --board-frame-highlight: rgba(255, 231, 196, 0.24);
+  --board-frame-shadow: rgba(44, 25, 12, 0.34);
+  --board-frame-border: rgba(255, 225, 184, 0.12);
+  --board-grid-shadow: rgba(66, 43, 25, 0.18);
+  --board-grid-border: rgba(67, 43, 25, 0.18);
+  --board-surface-bg: transparent;
+  --board-light-bg:
+    linear-gradient(22deg, rgba(255, 255, 255, 0.05) 0 12%, transparent 12% 28%, rgba(146, 105, 67, 0.04) 28% 34%, transparent 34% 48%, rgba(255, 255, 255, 0.04) 48% 62%, transparent 62%),
+    linear-gradient(112deg, rgba(139, 99, 60, 0.06) 0 10%, transparent 10% 24%, rgba(255, 255, 255, 0.05) 24% 38%, transparent 38% 100%),
+    linear-gradient(145deg, #f0d9b5 0%, #e4c394 52%, #edd0a7 100%);
+  --board-dark-bg:
+    linear-gradient(28deg, rgba(255, 220, 176, 0.05) 0 10%, transparent 10% 28%, rgba(66, 41, 21, 0.1) 28% 42%, transparent 42% 100%),
+    linear-gradient(118deg, rgba(46, 27, 15, 0.16) 0 12%, transparent 12% 26%, rgba(150, 102, 64, 0.06) 26% 38%, transparent 38% 100%),
+    linear-gradient(145deg, #a77751 0%, #845536 52%, #71472b 100%);
+  --board-preview-bg:
+    conic-gradient(from 90deg at 50% 50%, #f0d9b5 0 25%, #a77751 0 50%, #a77751 0 75%, #f0d9b5 0 100%);
+}
+
+.board-style-rosewood-classic {
+  --board-frame-bg: linear-gradient(135deg, #2e140f 0%, #5f2723 22%, #8b4039 48%, #5b221d 74%, #25100d 100%);
+  --board-frame-highlight: rgba(255, 215, 198, 0.18);
+  --board-frame-shadow: rgba(37, 14, 13, 0.4);
+  --board-frame-border: rgba(255, 198, 176, 0.12);
+  --board-grid-shadow: rgba(65, 25, 24, 0.18);
+  --board-grid-border: rgba(74, 27, 25, 0.2);
+  --board-surface-bg: transparent;
+  --board-light-bg:
+    linear-gradient(26deg, rgba(255, 247, 232, 0.08) 0 10%, transparent 10% 26%, rgba(170, 112, 90, 0.04) 26% 40%, transparent 40% 100%),
+    linear-gradient(118deg, rgba(178, 126, 101, 0.08) 0 10%, transparent 10% 25%, rgba(255, 255, 255, 0.05) 25% 38%, transparent 38% 100%),
+    linear-gradient(145deg, #f1d8c1 0%, #ddb38f 52%, #ebc8ad 100%);
+  --board-dark-bg:
+    linear-gradient(28deg, rgba(255, 219, 205, 0.05) 0 8%, transparent 8% 24%, rgba(88, 34, 31, 0.14) 24% 38%, transparent 38% 100%),
+    linear-gradient(118deg, rgba(60, 18, 18, 0.18) 0 12%, transparent 12% 28%, rgba(191, 109, 89, 0.07) 28% 40%, transparent 40% 100%),
+    linear-gradient(145deg, #9a5246 0%, #75362f 52%, #5d2722 100%);
+  --board-preview-bg:
+    conic-gradient(from 90deg at 50% 50%, #f1d8c1 0 25%, #9a5246 0 50%, #9a5246 0 75%, #f1d8c1 0 100%);
+}
+
+.board-style-slate-classic {
+  --board-frame-bg: linear-gradient(135deg, #171c1f 0%, #2d353b 24%, #46535c 50%, #2a3238 76%, #14181b 100%);
+  --board-frame-highlight: rgba(216, 226, 230, 0.18);
+  --board-frame-shadow: rgba(11, 14, 16, 0.42);
+  --board-frame-border: rgba(214, 223, 228, 0.12);
+  --board-grid-shadow: rgba(25, 29, 33, 0.2);
+  --board-grid-border: rgba(53, 58, 64, 0.2);
+  --board-surface-bg: transparent;
+  --board-light-bg:
+    linear-gradient(24deg, rgba(255, 255, 255, 0.06) 0 12%, transparent 12% 28%, rgba(150, 155, 162, 0.04) 28% 40%, transparent 40% 100%),
+    linear-gradient(112deg, rgba(205, 210, 216, 0.08) 0 10%, transparent 10% 26%, rgba(255, 255, 255, 0.05) 26% 40%, transparent 40% 100%),
+    linear-gradient(145deg, #f4f2ed 0%, #dfdbd4 50%, #efede7 100%);
+  --board-dark-bg:
+    linear-gradient(28deg, rgba(229, 237, 240, 0.04) 0 10%, transparent 10% 24%, rgba(18, 26, 29, 0.18) 24% 40%, transparent 40% 100%),
+    linear-gradient(118deg, rgba(18, 24, 28, 0.24) 0 12%, transparent 12% 30%, rgba(102, 118, 124, 0.08) 30% 42%, transparent 42% 100%),
+    linear-gradient(145deg, #67767d 0%, #4a575d 52%, #39444a 100%);
+  --board-preview-bg:
+    conic-gradient(from 90deg at 50% 50%, #f4f2ed 0 25%, #67767d 0 50%, #67767d 0 75%, #f4f2ed 0 100%);
 }
 
 .board-square:hover {
@@ -537,7 +639,7 @@ button {
   aspect-ratio: 1;
   border-radius: 0.6rem;
   overflow: hidden;
-  background: var(--board-surface-bg);
+  background: var(--board-preview-bg);
   background-size: cover;
   background-position: center;
   box-shadow: inset 0 0 0 1px var(--board-grid-border);
