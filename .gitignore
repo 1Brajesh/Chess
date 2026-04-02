@@ -4,3 +4,4 @@ dist/
 database-pwd-supabase.txt
 .env
 .env.local
+supabase/.temp/
