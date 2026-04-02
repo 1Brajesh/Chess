@@ -1,4 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import {
+  startTransition,
+  useEffect,
+  useEffectEvent,
+  useRef,
+  useState,
+} from 'react';
 import {
   PIECE_LABELS,
   STANDARD_START_FEN,
@@ -18,6 +24,7 @@ import {
   normalizeSetupState,
   parseFen,
   safeValidateFen,
+  serializeGameSummary,
 } from './lib/chess.js';
 import ChessPiece from './components/ChessPiece.jsx';
 import {
@@ -30,10 +37,31 @@ import {
   PIECE_STYLE_OPTIONS,
   normalizePieceStyle,
 } from './lib/pieceStyles.js';
+import {
+  DEFAULT_ONLINE_STATE,
+  buildInviteUrl,
+  createRoomCode,
+  formatOnlineStatus,
+  formatSeatLabel,
+  getPlayerColorForRoom,
+  normalizeRemoteGame,
+  normalizeRoomCode,
+  readLinkedRoomCode,
+  writeLinkedRoomCode,
+} from './lib/multiplayer.js';
+import { HAS_SUPABASE_CONFIG, supabase } from './lib/supabase.js';
 
 const APP_STORAGE_KEY = 'chess-board-session-v1';
 const SAVES_STORAGE_KEY = 'chess-board-saves-v1';
 const DISPLAY_PREFS_VERSION = 3;
+
+function createDefaultAuthState() {
+  return {
+    ready: !HAS_SUPABASE_CONFIG,
+    userId: null,
+    error: '',
+  };
+}
 
 const PALETTE_PIECES = [
   'wK',
@@ -195,6 +223,9 @@ export default function App() {
   const [orientation, setOrientation] = useState(persisted.orientation);
   const [boardStyle, setBoardStyle] = useState(persisted.boardStyle);
   const [pieceStyle, setPieceStyle] = useState(persisted.pieceStyle);
+  const [authState, setAuthState] = useState(createDefaultAuthState);
+  const [onlineState, setOnlineState] = useState(DEFAULT_ONLINE_STATE);
+  const [roomCodeInput, setRoomCodeInput] = useState(readLinkedRoomCode);
   const [isCustomizeOpen, setIsCustomizeOpen] = useState(false);
   const [customizeTab, setCustomizeTab] = useState('board');
   const [gameState, setGameState] = useState(persisted.gameState);
@@ -208,6 +239,7 @@ export default function App() {
   const [message, setMessage] = useState('Board ready.');
   const [captureAnimation, setCaptureAnimation] = useState(null);
   const previousMoveCountRef = useRef(persisted.gameState.moves.length);
+  const roomChannelRef = useRef(null);
 
   const chess = buildChess(gameState);
   const gameBoard = parseFen(chess.fen());
@@ -233,6 +265,14 @@ export default function App() {
   const activeBoardStyleLabel =
     BOARD_STYLE_OPTIONS.find((option) => option.value === boardStyle)?.label ??
     'Walnut';
+  const isOnlineConnected = Boolean(onlineState.roomId);
+  const isOnlineBusy =
+    onlineState.status === 'hosting' || onlineState.status === 'joining';
+  const onlineControlsLocked = isOnlineConnected || isOnlineBusy;
+  const isOnlinePlayersTurn =
+    !isOnlineConnected || onlineState.playerColor === activeTurnColor;
+  const canEditSetup = !onlineControlsLocked;
+  const onlineStatusLabel = formatOnlineStatus(onlineState);
 
   useEffect(() => {
     window.localStorage.setItem(
@@ -258,6 +298,193 @@ export default function App() {
     setPendingPromotion(null);
     setDragSquare(null);
   }, [mode]);
+
+  async function clearRoomSubscription() {
+    if (!supabase || !roomChannelRef.current) {
+      return;
+    }
+
+    const channel = roomChannelRef.current;
+    roomChannelRef.current = null;
+    await supabase.removeChannel(channel);
+  }
+
+  function getOnlineConnectionStatus(room) {
+    if (room?.status === 'finished') {
+      return 'finished';
+    }
+
+    return room?.black_player_id ? 'connected' : 'waiting';
+  }
+
+  function syncRoomState(room, playerColor) {
+    const nextGameState = normalizeRemoteGame(room);
+    const resolvedPlayerColor =
+      playerColor ?? getPlayerColorForRoom(room, authState.userId);
+
+    setGameState(nextGameState);
+    setMode('game');
+    setSelectedSquare(null);
+    setPendingPromotion(null);
+    setDragSquare(null);
+    setOnlineState({
+      status: getOnlineConnectionStatus(room),
+      roomId: room.id,
+      roomCode: room.room_code,
+      playerColor: resolvedPlayerColor,
+      remoteVersion: Number.isFinite(room.version)
+        ? room.version
+        : nextGameState.moves.length,
+      inviteUrl: buildInviteUrl(room.room_code),
+      lastSyncedAt: room.updated_at ?? null,
+    });
+    writeLinkedRoomCode(room.room_code);
+    setRoomCodeInput(room.room_code);
+  }
+
+  const handleRoomPayload = useEffectEvent((payload) => {
+    const room = payload.new;
+
+    if (!room || room.id !== onlineState.roomId) {
+      return;
+    }
+
+    if (Number.isFinite(room.version) && room.version <= onlineState.remoteVersion) {
+      return;
+    }
+
+    const nextGameState = normalizeRemoteGame(room);
+    const previousMoveCount = gameState.moves.length;
+    const nextMoveCount = nextGameState.moves.length;
+
+    startTransition(() => {
+      syncRoomState(room, getPlayerColorForRoom(room, authState.userId));
+    });
+
+    if (
+      onlineState.status === 'waiting' &&
+      room.black_player_id &&
+      room.status !== 'finished'
+    ) {
+      setMessage('Black joined the room.');
+      return;
+    }
+
+    if (nextMoveCount > previousMoveCount && room.last_move_san) {
+      setMessage(`${room.last_move_san} synced.`);
+      return;
+    }
+
+    if (room.status === 'finished') {
+      setMessage(serializeGameSummary(buildChess(nextGameState)));
+    }
+  });
+
+  useEffect(() => {
+    if (!supabase) {
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    async function ensureAnonymousSession() {
+      const { data, error } = await supabase.auth.getSession();
+
+      if (cancelled) {
+        return;
+      }
+
+      if (error) {
+        setAuthState({
+          ready: true,
+          userId: null,
+          error: error.message,
+        });
+        setMessage('Supabase auth could not start.');
+        return;
+      }
+
+      let user = data.session?.user ?? null;
+
+      if (!user) {
+        const { data: anonymousData, error: anonymousError } =
+          await supabase.auth.signInAnonymously();
+
+        if (cancelled) {
+          return;
+        }
+
+        if (anonymousError) {
+          setAuthState({
+            ready: true,
+            userId: null,
+            error: anonymousError.message,
+          });
+          setMessage('Enable anonymous sign-ins in Supabase Auth first.');
+          return;
+        }
+
+        user = anonymousData.user ?? null;
+      }
+
+      setAuthState({
+        ready: true,
+        userId: user?.id ?? null,
+        error: '',
+      });
+    }
+
+    ensureAnonymousSession();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (cancelled) {
+        return;
+      }
+
+      setAuthState({
+        ready: true,
+        userId: session?.user?.id ?? null,
+        error: '',
+      });
+    });
+
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!supabase || !onlineState.roomId) {
+      return undefined;
+    }
+
+    const channel = supabase
+      .channel(`game-room-${onlineState.roomId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'games',
+          filter: `id=eq.${onlineState.roomId}`,
+        },
+        handleRoomPayload,
+      )
+      .subscribe();
+
+    roomChannelRef.current = channel;
+
+    return () => {
+      if (roomChannelRef.current === channel) {
+        roomChannelRef.current = null;
+      }
+
+      supabase.removeChannel(channel);
+    };
+  }, [handleRoomPayload, onlineState.roomId]);
 
   useEffect(() => {
     const previousMoveCount = previousMoveCountRef.current;
@@ -300,7 +527,187 @@ export default function App() {
     previousMoveCountRef.current = currentMoveCount;
   }, [capturedPieces, gameState.moves.length, lastMove, mode]);
 
-  function attemptMove(from, to, promotion) {
+  async function leaveOnlineGame(nextMessage = 'Left the online room.') {
+    await clearRoomSubscription();
+    setOnlineState(DEFAULT_ONLINE_STATE);
+    writeLinkedRoomCode('');
+    setRoomCodeInput(readLinkedRoomCode());
+    setMessage(nextMessage);
+  }
+
+  async function hostOnlineGame() {
+    if (!supabase || !HAS_SUPABASE_CONFIG) {
+      setMessage('Supabase is not configured yet.');
+      return;
+    }
+
+    if (!authState.ready || !authState.userId) {
+      setMessage('Online identity is still connecting.');
+      return;
+    }
+
+    if (mode !== 'game') {
+      setMessage('Switch back to game mode before hosting online.');
+      return;
+    }
+
+    if (isOnlineConnected) {
+      await leaveOnlineGame('Left the previous room.');
+    }
+
+    setOnlineState({
+      ...DEFAULT_ONLINE_STATE,
+      status: 'hosting',
+    });
+    setMessage('Creating online room...');
+
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      const roomCode = createRoomCode();
+      const { data, error } = await supabase
+        .from('games')
+        .insert({
+          room_code: roomCode,
+          host_user_id: authState.userId,
+          white_player_id: authState.userId,
+          black_player_id: null,
+          start_fen: gameState.startFen,
+          current_fen: chess.fen(),
+          moves: gameState.moves,
+          status: 'waiting',
+          last_move_san: lastMove?.san ?? null,
+          version: gameState.moves.length,
+        })
+        .select()
+        .single();
+
+      if (error?.code === '23505') {
+        continue;
+      }
+
+      if (error || !data) {
+        setOnlineState(DEFAULT_ONLINE_STATE);
+        setMessage(error?.message ?? 'Could not create the online room.');
+        return;
+      }
+
+      syncRoomState(data, 'w');
+      setMessage(`Room ${data.room_code} is live. Share the invite link for Black.`);
+      return;
+    }
+
+    setOnlineState(DEFAULT_ONLINE_STATE);
+    setMessage('Could not reserve a unique room code. Try again.');
+  }
+
+  async function joinOnlineGame(roomCodeCandidate = roomCodeInput) {
+    if (!supabase || !HAS_SUPABASE_CONFIG) {
+      setMessage('Supabase is not configured yet.');
+      return;
+    }
+
+    if (!authState.ready || !authState.userId) {
+      setMessage('Online identity is still connecting.');
+      return;
+    }
+
+    const roomCode = normalizeRoomCode(roomCodeCandidate);
+
+    if (!roomCode) {
+      setMessage('Enter a room code first.');
+      return;
+    }
+
+    if (isOnlineConnected && roomCode === onlineState.roomCode) {
+      setMessage(`Already connected to room ${roomCode}.`);
+      return;
+    }
+
+    if (isOnlineConnected) {
+      await leaveOnlineGame('Switching rooms...');
+    }
+
+    setOnlineState({
+      ...DEFAULT_ONLINE_STATE,
+      status: 'joining',
+      roomCode,
+    });
+    setRoomCodeInput(roomCode);
+    setMessage(`Joining room ${roomCode}...`);
+
+    const { data: existingRoom, error: selectError } = await supabase
+      .from('games')
+      .select('*')
+      .eq('room_code', roomCode)
+      .maybeSingle();
+
+    if (selectError) {
+      setOnlineState(DEFAULT_ONLINE_STATE);
+      setMessage(selectError.message);
+      return;
+    }
+
+    if (!existingRoom) {
+      setOnlineState(DEFAULT_ONLINE_STATE);
+      setMessage(`Room ${roomCode} was not found.`);
+      return;
+    }
+
+    let nextRoom = existingRoom;
+    let playerColor = getPlayerColorForRoom(existingRoom, authState.userId);
+
+    if (!playerColor) {
+      if (existingRoom.black_player_id) {
+        setOnlineState(DEFAULT_ONLINE_STATE);
+        setMessage(`Room ${roomCode} already has two players.`);
+        return;
+      }
+
+      const { data: joinedRoom, error: joinError } = await supabase
+        .from('games')
+        .update({
+          black_player_id: authState.userId,
+          status: existingRoom.status === 'finished' ? 'finished' : 'active',
+          version: (existingRoom.version ?? 0) + 1,
+        })
+        .eq('id', existingRoom.id)
+        .is('black_player_id', null)
+        .select()
+        .single();
+
+      if (joinError || !joinedRoom) {
+        setOnlineState(DEFAULT_ONLINE_STATE);
+        setMessage(joinError?.message ?? `Room ${roomCode} filled before you joined.`);
+        return;
+      }
+
+      nextRoom = joinedRoom;
+      playerColor = 'b';
+    }
+
+    syncRoomState(nextRoom, playerColor);
+
+    if (playerColor === 'b') {
+      setOrientation('b');
+    }
+
+    setMessage(`Joined room ${nextRoom.room_code} as ${formatSeatLabel(playerColor)}.`);
+  }
+
+  async function copyInviteLink() {
+    if (!onlineState.inviteUrl || typeof navigator === 'undefined' || !navigator.clipboard) {
+      setMessage('Copy the room code manually.');
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(onlineState.inviteUrl);
+      setMessage('Invite link copied.');
+    } catch {
+      setMessage('Could not copy the invite link.');
+    }
+  }
+
+  async function attemptMove(from, to, promotion) {
     const promotionChoices = getPromotionChoices(chess, from, to);
 
     if (promotionChoices.length > 0 && !promotion) {
@@ -309,6 +716,11 @@ export default function App() {
         to,
         choices: promotionChoices,
       });
+      return false;
+    }
+
+    if (isOnlineConnected && !isOnlinePlayersTurn) {
+      setMessage('Wait for the other side to move.');
       return false;
     }
 
@@ -321,10 +733,40 @@ export default function App() {
       return false;
     }
 
-    setGameState((current) => ({
-      ...current,
-      moves: [...current.moves, move],
-    }));
+    if (isOnlineConnected) {
+      const nextMoves = [...gameState.moves, move];
+      const nextStatus = replay.isGameOver()
+        ? 'finished'
+        : onlineState.status === 'waiting'
+          ? 'waiting'
+          : 'active';
+      const { data, error } = await supabase
+        .from('games')
+        .update({
+          moves: nextMoves,
+          current_fen: replay.fen(),
+          last_move_san: result.san,
+          status: nextStatus,
+          version: onlineState.remoteVersion + 1,
+        })
+        .eq('id', onlineState.roomId)
+        .eq('version', onlineState.remoteVersion)
+        .select()
+        .single();
+
+      if (error || !data) {
+        setMessage(error?.message ?? 'The room changed before your move synced.');
+        return false;
+      }
+
+      syncRoomState(data, onlineState.playerColor);
+    } else {
+      setGameState((current) => ({
+        ...current,
+        moves: [...current.moves, move],
+      }));
+    }
+
     setSelectedSquare(null);
     setPendingPromotion(null);
     setMessage(`${result.san} played.`);
@@ -332,6 +774,12 @@ export default function App() {
   }
 
   function handleGameSquareClick(square) {
+    if (isOnlineConnected && !isOnlinePlayersTurn) {
+      setSelectedSquare(null);
+      setMessage('Wait for the other side to move.');
+      return;
+    }
+
     if (chess.isGameOver()) {
       setSelectedSquare(null);
       setMessage('The game is over. Start a new game or rewind.');
@@ -401,6 +849,11 @@ export default function App() {
       return;
     }
 
+    if (isOnlineConnected && !isOnlinePlayersTurn) {
+      setMessage('Wait for the other side to move.');
+      return;
+    }
+
     const piece = gameBoard.position[square];
 
     if (!piece || getPieceColor(piece) !== chess.turn() || chess.isGameOver()) {
@@ -421,6 +874,11 @@ export default function App() {
   }
 
   function handleUndo() {
+    if (onlineControlsLocked) {
+      setMessage('Undo stays local-only. Leave the room first.');
+      return;
+    }
+
     if (gameState.moves.length === 0) {
       setMessage('No moves to undo.');
       return;
@@ -436,6 +894,11 @@ export default function App() {
   }
 
   function rewindToStart() {
+    if (onlineControlsLocked) {
+      setMessage('Rewind stays local-only. Leave the room first.');
+      return;
+    }
+
     if (gameState.moves.length === 0) {
       setMessage('Already at the start of the game.');
       return;
@@ -451,6 +914,11 @@ export default function App() {
   }
 
   function startNewGame() {
+    if (onlineControlsLocked) {
+      setMessage('Start a fresh local game after leaving the room.');
+      return;
+    }
+
     setGameState(createGameState());
     setMode('game');
     setSelectedSquare(null);
@@ -459,6 +927,11 @@ export default function App() {
   }
 
   function copyGameToSetup() {
+    if (onlineControlsLocked) {
+      setMessage('Setup mode stays local-only. Leave the room first.');
+      return;
+    }
+
     setSetupState(makeEditorStateFromFen(chess.fen()));
     setMode('setup');
     setSelectedSquare(null);
@@ -467,6 +940,11 @@ export default function App() {
   }
 
   function startGameFromSetup() {
+    if (onlineControlsLocked) {
+      setMessage('Setup mode stays local-only. Leave the room first.');
+      return;
+    }
+
     if (!setupValidation.valid) {
       setMessage(setupValidation.message);
       return;
@@ -523,6 +1001,11 @@ export default function App() {
   }
 
   function loadSave(item) {
+    if (onlineControlsLocked) {
+      setMessage('Leave the online room before loading a local snapshot.');
+      return;
+    }
+
     if (item.type === 'game') {
       setGameState(normalizeGameState(item.payload?.gameState));
       setMode('game');
@@ -643,16 +1126,36 @@ export default function App() {
           </div>
 
           <div className="board-actions">
-            <button className="primary-button" type="button" onClick={startNewGame}>
+            <button
+              className="primary-button"
+              type="button"
+              onClick={startNewGame}
+              disabled={onlineControlsLocked}
+            >
               New Standard Game
             </button>
-            <button className="ghost-button" type="button" onClick={handleUndo}>
+            <button
+              className="ghost-button"
+              type="button"
+              onClick={handleUndo}
+              disabled={onlineControlsLocked}
+            >
               Undo Move
             </button>
-            <button className="ghost-button" type="button" onClick={rewindToStart}>
+            <button
+              className="ghost-button"
+              type="button"
+              onClick={rewindToStart}
+              disabled={onlineControlsLocked}
+            >
               Rewind To Start
             </button>
-            <button className="ghost-button" type="button" onClick={copyGameToSetup}>
+            <button
+              className="ghost-button"
+              type="button"
+              onClick={copyGameToSetup}
+              disabled={onlineControlsLocked}
+            >
               Copy To Setup
             </button>
             <button
@@ -711,6 +1214,116 @@ export default function App() {
         <section className="side-panel">
           <article className="card">
             <div className="section-heading">
+              <div>
+                <h2>Online Play</h2>
+                <p>Host a room or join a friend with Supabase realtime sync.</p>
+              </div>
+              <span
+                className={[
+                  'status-badge',
+                  isOnlineBusy
+                    ? 'pending'
+                    : isOnlineConnected
+                      ? onlineState.status === 'finished'
+                        ? 'local'
+                        : onlineState.status === 'waiting'
+                        ? 'waiting'
+                        : 'live'
+                      : 'local',
+                ].join(' ')}
+              >
+                {isOnlineBusy
+                  ? 'Connecting'
+                  : isOnlineConnected
+                    ? onlineState.status === 'finished'
+                      ? 'Finished'
+                      : onlineState.status === 'waiting'
+                      ? 'Waiting'
+                      : 'Live'
+                    : 'Local'}
+              </span>
+            </div>
+
+            <div className="customize-summary">
+              <span className="board-chip">{onlineStatusLabel}</span>
+              {onlineState.playerColor ? (
+                <span className="board-chip">
+                  {formatSeatLabel(onlineState.playerColor)} seat
+                </span>
+              ) : null}
+            </div>
+
+            <div className="online-panel">
+              <button
+                type="button"
+                className="primary-button"
+                onClick={hostOnlineGame}
+                disabled={mode !== 'game' || isOnlineBusy}
+              >
+                Host Online Game
+              </button>
+
+              <div className="join-room-row">
+                <input
+                  type="text"
+                  inputMode="text"
+                  autoCapitalize="characters"
+                  value={roomCodeInput}
+                  onChange={(event) =>
+                    setRoomCodeInput(normalizeRoomCode(event.target.value))
+                  }
+                  placeholder="Room code"
+                  disabled={isOnlineBusy}
+                />
+                <button
+                  type="button"
+                  className="ghost-button"
+                  onClick={() => joinOnlineGame()}
+                  disabled={isOnlineBusy}
+                >
+                  Join Room
+                </button>
+              </div>
+
+              {isOnlineConnected ? (
+                <div className="online-room-card">
+                  <div>
+                    <strong>Room {onlineState.roomCode}</strong>
+                    <p>
+                      {onlineState.status === 'finished'
+                        ? 'Game finished. The room remains available for review.'
+                        : onlineState.status === 'waiting'
+                        ? 'Waiting for the Black side to join.'
+                        : `Synced live as ${formatSeatLabel(onlineState.playerColor)}.`}
+                    </p>
+                  </div>
+                  <div className="save-actions">
+                    <button
+                      type="button"
+                      className="ghost-button"
+                      onClick={copyInviteLink}
+                    >
+                      Copy Invite Link
+                    </button>
+                    <button
+                      type="button"
+                      className="text-button"
+                      onClick={() => leaveOnlineGame()}
+                    >
+                      Leave Room
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+
+              <p className={authState.error ? 'hint warning' : 'hint'}>
+                {authState.error || message}
+              </p>
+            </div>
+          </article>
+
+          <article className="card">
+            <div className="section-heading">
               <h2>Mode</h2>
               <p>Switch between legal play and free setup editing.</p>
             </div>
@@ -726,6 +1339,7 @@ export default function App() {
                 type="button"
                 className={mode === 'setup' ? 'primary-button' : 'ghost-button'}
                 onClick={() => setMode('setup')}
+                disabled={!canEditSetup}
               >
                 Setup
               </button>
@@ -964,6 +1578,7 @@ export default function App() {
                         type="button"
                         className="ghost-button"
                         onClick={() => loadSave(item)}
+                        disabled={onlineControlsLocked}
                       >
                         Load
                       </button>
