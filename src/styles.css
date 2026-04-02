@@ -219,16 +219,16 @@ button {
 
 .turn-marker {
   display: inline-block;
-  width: 0.9rem;
-  height: 0.9rem;
+  width: 1.05rem;
+  height: 1.05rem;
   border-radius: 999px;
-  border: 1px solid rgba(39, 85, 77, 0.18);
+  border: 1px solid rgba(58, 128, 102, 0.2);
   background:
-    radial-gradient(circle at 35% 35%, rgba(227, 255, 243, 0.98), rgba(120, 220, 178, 0.94) 42%, rgba(39, 85, 77, 0.98) 100%);
+    radial-gradient(circle at 35% 35%, rgba(239, 255, 247, 0.99), rgba(144, 240, 190, 0.97) 42%, rgba(50, 114, 88, 0.98) 100%);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.38),
-    0 0 0 0.22rem rgba(72, 156, 124, 0.12),
-    0 0 1rem rgba(72, 156, 124, 0.32);
+    inset 0 1px 0 rgba(255, 255, 255, 0.42),
+    0 0 0 0.24rem rgba(106, 196, 154, 0.16),
+    0 0 1.15rem rgba(106, 196, 154, 0.4);
   animation: turn-pill-pulse 1.9s ease-in-out infinite;
 }
 
@@ -315,16 +315,16 @@ button {
   0%,
   100% {
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.34),
-      0 0 0 0.2rem rgba(72, 156, 124, 0.12),
-      0 0 1rem rgba(72, 156, 124, 0.28);
+      inset 0 1px 0 rgba(255, 255, 255, 0.42),
+      0 0 0 0.24rem rgba(106, 196, 154, 0.16),
+      0 0 1.15rem rgba(106, 196, 154, 0.4);
   }
 
   50% {
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.38),
-      0 0 0 0.28rem rgba(72, 156, 124, 0.18),
-      0 0 1.35rem rgba(72, 156, 124, 0.34);
+      inset 0 1px 0 rgba(255, 255, 255, 0.45),
+      0 0 0 0.32rem rgba(106, 196, 154, 0.22),
+      0 0 1.45rem rgba(106, 196, 154, 0.46);
   }
 }
 
