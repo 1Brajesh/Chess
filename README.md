@@ -47,10 +47,13 @@ One-time dashboard setup:
 
 What the online mode does:
 
-- `Host Online Game` creates a room and assigns the host to White
-- `Join Room` claims the Black seat if it is still open
+- `Host Online Game` creates a room and assigns the host to the selected side
+- the host seat defaults to the current board orientation, but can be overridden
+- `Join Room` claims whichever side is still open
 - moves are synced live through Supabase Realtime
 - setup mode, undo, rewind, and local save loading stay local-only while a room is connected
+
+If you already ran an older version of the SQL setup, run [supabase/schema.sql](/Volumes/T7/kritika4/Documents/Coding/Chess/supabase/schema.sql) again so the table allows the host to start as either White or Black.
 
 ## Asset Credits
 

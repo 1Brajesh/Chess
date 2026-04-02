@@ -4,7 +4,7 @@ create table if not exists public.games (
   id uuid primary key default gen_random_uuid(),
   room_code text not null unique,
   host_user_id uuid not null,
-  white_player_id uuid not null,
+  white_player_id uuid,
   black_player_id uuid,
   start_fen text not null,
   current_fen text not null,
@@ -17,8 +17,26 @@ create table if not exists public.games (
   constraint games_status_check
     check (status in ('waiting', 'active', 'finished')),
   constraint games_room_code_check
-    check (room_code = upper(room_code) and length(room_code) between 4 and 12)
+    check (room_code = upper(room_code) and length(room_code) between 4 and 12),
+  constraint games_host_seat_check
+    check (
+      (white_player_id is not null or black_player_id is not null)
+      and (host_user_id = white_player_id or host_user_id = black_player_id)
+    )
 );
+
+alter table public.games
+  alter column white_player_id drop not null;
+
+alter table public.games
+  drop constraint if exists games_host_seat_check;
+
+alter table public.games
+  add constraint games_host_seat_check
+    check (
+      (white_player_id is not null or black_player_id is not null)
+      and (host_user_id = white_player_id or host_user_id = black_player_id)
+    );
 
 create or replace function public.set_updated_at()
 returns trigger
@@ -37,8 +55,13 @@ as $$
 begin
   if old.room_code is distinct from new.room_code
      or old.host_user_id is distinct from new.host_user_id
-     or old.white_player_id is distinct from new.white_player_id then
+  then
     raise exception 'game identity fields are immutable';
+  end if;
+
+  if old.white_player_id is not null
+     and old.white_player_id is distinct from new.white_player_id then
+    raise exception 'white seat cannot be reassigned';
   end if;
 
   if old.black_player_id is not null
@@ -80,8 +103,10 @@ to authenticated
 with check (
   auth.uid() is not null
   and host_user_id = auth.uid()
-  and white_player_id = auth.uid()
-  and black_player_id is null
+  and (
+    (white_player_id = auth.uid() and black_player_id is null)
+    or (black_player_id = auth.uid() and white_player_id is null)
+  )
 );
 
 drop policy if exists "games_update_participants_or_joiners" on public.games;
@@ -94,6 +119,7 @@ using (
   and (
     auth.uid() = white_player_id
     or auth.uid() = black_player_id
+    or white_player_id is null
     or black_player_id is null
   )
 )

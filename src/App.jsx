@@ -226,6 +226,7 @@ export default function App() {
   const [authState, setAuthState] = useState(createDefaultAuthState);
   const [onlineState, setOnlineState] = useState(DEFAULT_ONLINE_STATE);
   const [roomCodeInput, setRoomCodeInput] = useState(readLinkedRoomCode);
+  const [manualHostColor, setManualHostColor] = useState(null);
   const [isCustomizeOpen, setIsCustomizeOpen] = useState(false);
   const [customizeTab, setCustomizeTab] = useState('board');
   const [gameState, setGameState] = useState(persisted.gameState);
@@ -265,6 +266,7 @@ export default function App() {
   const activeBoardStyleLabel =
     BOARD_STYLE_OPTIONS.find((option) => option.value === boardStyle)?.label ??
     'Walnut';
+  const preferredHostColor = manualHostColor ?? orientation;
   const isOnlineConnected = Boolean(onlineState.roomId);
   const isOnlineBusy =
     onlineState.status === 'hosting' || onlineState.status === 'joining';
@@ -563,13 +565,14 @@ export default function App() {
 
     for (let attempt = 0; attempt < 4; attempt += 1) {
       const roomCode = createRoomCode();
+      const hostsWhite = preferredHostColor === 'w';
       const { data, error } = await supabase
         .from('games')
         .insert({
           room_code: roomCode,
           host_user_id: authState.userId,
-          white_player_id: authState.userId,
-          black_player_id: null,
+          white_player_id: hostsWhite ? authState.userId : null,
+          black_player_id: hostsWhite ? null : authState.userId,
           start_fen: gameState.startFen,
           current_fen: chess.fen(),
           moves: gameState.moves,
@@ -590,8 +593,12 @@ export default function App() {
         return;
       }
 
-      syncRoomState(data, 'w');
-      setMessage(`Room ${data.room_code} is live. Share the invite link for Black.`);
+      syncRoomState(data, preferredHostColor);
+      setMessage(
+        `Room ${data.room_code} is live. Share the invite link for ${
+          preferredHostColor === 'w' ? 'Black' : 'White'
+        }.`,
+      );
       return;
     }
 
@@ -656,7 +663,13 @@ export default function App() {
     let playerColor = getPlayerColorForRoom(existingRoom, authState.userId);
 
     if (!playerColor) {
-      if (existingRoom.black_player_id) {
+      const openSeatColor = existingRoom.white_player_id
+        ? existingRoom.black_player_id
+          ? null
+          : 'b'
+        : 'w';
+
+      if (!openSeatColor) {
         setOnlineState(DEFAULT_ONLINE_STATE);
         setMessage(`Room ${roomCode} already has two players.`);
         return;
@@ -665,12 +678,15 @@ export default function App() {
       const { data: joinedRoom, error: joinError } = await supabase
         .from('games')
         .update({
-          black_player_id: authState.userId,
+          white_player_id:
+            openSeatColor === 'w' ? authState.userId : existingRoom.white_player_id,
+          black_player_id:
+            openSeatColor === 'b' ? authState.userId : existingRoom.black_player_id,
           status: existingRoom.status === 'finished' ? 'finished' : 'active',
           version: (existingRoom.version ?? 0) + 1,
         })
         .eq('id', existingRoom.id)
-        .is('black_player_id', null)
+        .is(openSeatColor === 'w' ? 'white_player_id' : 'black_player_id', null)
         .select()
         .single();
 
@@ -681,13 +697,13 @@ export default function App() {
       }
 
       nextRoom = joinedRoom;
-      playerColor = 'b';
+      playerColor = openSeatColor;
     }
 
     syncRoomState(nextRoom, playerColor);
 
-    if (playerColor === 'b') {
-      setOrientation('b');
+    if (playerColor) {
+      setOrientation(playerColor);
     }
 
     setMessage(`Joined room ${nextRoom.room_code} as ${formatSeatLabel(playerColor)}.`);
@@ -1254,6 +1270,42 @@ export default function App() {
             </div>
 
             <div className="online-panel">
+              <div className="host-seat-panel">
+                <span className="hint">
+                  Host seat defaults to the current board side.
+                </span>
+                <div className="seat-toggle" role="group" aria-label="Host color">
+                  <button
+                    type="button"
+                    className={
+                      preferredHostColor === 'w'
+                        ? 'customize-tab active'
+                        : 'customize-tab'
+                    }
+                    onClick={() =>
+                      setManualHostColor(orientation === 'w' ? null : 'w')
+                    }
+                    disabled={isOnlineBusy || isOnlineConnected}
+                  >
+                    Host as White
+                  </button>
+                  <button
+                    type="button"
+                    className={
+                      preferredHostColor === 'b'
+                        ? 'customize-tab active'
+                        : 'customize-tab'
+                    }
+                    onClick={() =>
+                      setManualHostColor(orientation === 'b' ? null : 'b')
+                    }
+                    disabled={isOnlineBusy || isOnlineConnected}
+                  >
+                    Host as Black
+                  </button>
+                </div>
+              </div>
+
               <button
                 type="button"
                 className="primary-button"
@@ -1293,7 +1345,9 @@ export default function App() {
                       {onlineState.status === 'finished'
                         ? 'Game finished. The room remains available for review.'
                         : onlineState.status === 'waiting'
-                        ? 'Waiting for the Black side to join.'
+                        ? `Waiting for the ${
+                            onlineState.playerColor === 'w' ? 'Black' : 'White'
+                          } side to join.`
                         : `Synced live as ${formatSeatLabel(onlineState.playerColor)}.`}
                     </p>
                   </div>

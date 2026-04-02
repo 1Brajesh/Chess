@@ -122,8 +122,15 @@ export function formatOnlineStatus(onlineState) {
   }
 
   if (onlineState.roomCode && onlineState.playerColor) {
+    const waitingSeat =
+      onlineState.playerColor === 'w'
+        ? 'Black'
+        : onlineState.playerColor === 'b'
+          ? 'White'
+          : 'Opponent';
+
     return onlineState.status === 'waiting'
-      ? `Room ${onlineState.roomCode} is waiting for Black`
+      ? `Room ${onlineState.roomCode} is waiting for ${waitingSeat}`
       : `Live room ${onlineState.roomCode}`;
   }
 
