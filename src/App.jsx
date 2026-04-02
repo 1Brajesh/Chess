@@ -19,6 +19,11 @@ import {
   serializeGameSummary,
 } from './lib/chess.js';
 import ChessPiece from './components/ChessPiece.jsx';
+import {
+  DEFAULT_PIECE_STYLE,
+  PIECE_STYLE_OPTIONS,
+  normalizePieceStyle,
+} from './lib/pieceStyles.js';
 
 const APP_STORAGE_KEY = 'chess-board-session-v1';
 const SAVES_STORAGE_KEY = 'chess-board-saves-v1';
@@ -43,6 +48,7 @@ function loadPersistedApp() {
   const fallback = {
     mode: 'game',
     orientation: 'w',
+    pieceStyle: DEFAULT_PIECE_STYLE,
     gameState: createGameState(),
     setupState: makeEditorStateFromFen(STANDARD_START_FEN),
   };
@@ -63,6 +69,7 @@ function loadPersistedApp() {
     return {
       mode: parsed.mode === 'setup' ? 'setup' : 'game',
       orientation: parsed.orientation === 'b' ? 'b' : 'w',
+      pieceStyle: normalizePieceStyle(parsed.pieceStyle),
       gameState: normalizeGameState(parsed.gameState),
       setupState: normalizeSetupState(parsed.setupState),
     };
@@ -109,6 +116,7 @@ export default function App() {
   const [persisted] = useState(loadPersistedApp);
   const [mode, setMode] = useState(persisted.mode);
   const [orientation, setOrientation] = useState(persisted.orientation);
+  const [pieceStyle, setPieceStyle] = useState(persisted.pieceStyle);
   const [gameState, setGameState] = useState(persisted.gameState);
   const [setupState, setSetupState] = useState(persisted.setupState);
   const [savedItems, setSavedItems] = useState(loadSavedItems);
@@ -141,6 +149,9 @@ export default function App() {
         }`;
   const boardPerspective =
     orientation === 'w' ? 'White pieces at bottom' : 'Black pieces at bottom';
+  const activePieceStyleLabel =
+    PIECE_STYLE_OPTIONS.find((option) => option.value === pieceStyle)?.label ??
+    'Classic';
 
   useEffect(() => {
     window.localStorage.setItem(
@@ -148,11 +159,12 @@ export default function App() {
       JSON.stringify({
         mode,
         orientation,
+        pieceStyle,
         gameState,
         setupState,
       }),
     );
-  }, [gameState, mode, orientation, setupState]);
+  }, [gameState, mode, orientation, pieceStyle, setupState]);
 
   useEffect(() => {
     window.localStorage.setItem(SAVES_STORAGE_KEY, JSON.stringify(savedItems));
@@ -431,6 +443,7 @@ export default function App() {
                     ? `${moveList.length} move${moveList.length === 1 ? '' : 's'} recorded`
                     : `${setupState.turn === 'w' ? 'White' : 'Black'} to move`}
                 </span>
+                <span className="board-chip">{activePieceStyleLabel} pieces</span>
               </div>
             </div>
             <button
@@ -487,7 +500,9 @@ export default function App() {
                       {fileLabel ? (
                         <span className="square-file">{fileLabel}</span>
                       ) : null}
-                      {piece ? <ChessPiece piece={piece} /> : null}
+                      {piece ? (
+                        <ChessPiece piece={piece} pieceStyle={pieceStyle} />
+                      ) : null}
                     </button>
                   );
                 }),
@@ -530,7 +545,11 @@ export default function App() {
                           )
                         }
                       >
-                        <ChessPiece piece={pieceCode} className="promotion-piece" />
+                        <ChessPiece
+                          piece={pieceCode}
+                          pieceStyle={pieceStyle}
+                          className="promotion-piece"
+                        />
                         {PIECE_LABELS[pieceCode]}
                       </button>
                     );
@@ -571,6 +590,37 @@ export default function App() {
               </button>
             </div>
 
+            <div className="piece-style-panel">
+              <div className="section-heading compact">
+                <h3>Piece Style</h3>
+                <p>Choose how the pieces are drawn.</p>
+              </div>
+              <div className="piece-style-grid">
+                {PIECE_STYLE_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    className={
+                      pieceStyle === option.value
+                        ? 'piece-style-button active'
+                        : 'piece-style-button'
+                    }
+                    onClick={() => setPieceStyle(option.value)}
+                  >
+                    <span className="piece-style-preview" aria-hidden="true">
+                      <ChessPiece piece="wK" pieceStyle={option.value} />
+                      <ChessPiece piece="wQ" pieceStyle={option.value} />
+                      <ChessPiece piece="bN" pieceStyle={option.value} />
+                    </span>
+                    <span className="piece-style-copy">
+                      <strong>{option.label}</strong>
+                      <span>{option.description}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {mode === 'setup' ? (
               <>
                 <div className="setup-palette">
@@ -589,7 +639,11 @@ export default function App() {
                         {piece === 'erase' ? (
                           <span className="erase-symbol">×</span>
                         ) : (
-                          <ChessPiece piece={piece} className="palette-piece" />
+                          <ChessPiece
+                            piece={piece}
+                            pieceStyle={pieceStyle}
+                            className="palette-piece"
+                          />
                         )}
                       </span>
                       <span>{PIECE_LABELS[piece]}</span>
