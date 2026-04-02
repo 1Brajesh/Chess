@@ -68,8 +68,7 @@ button {
 }
 
 .hero {
-  display: flex;
-  margin-bottom: 1rem;
+  margin-bottom: 0.5rem;
 }
 
 .eyebrow {
@@ -122,7 +121,6 @@ button {
   pointer-events: none;
 }
 
-.board-toolbar,
 .section-heading,
 .board-actions,
 .save-form,
@@ -134,14 +132,12 @@ button {
   gap: 0.75rem;
 }
 
-.board-toolbar,
 .section-heading,
 .save-item {
   justify-content: space-between;
   align-items: flex-start;
 }
 
-.board-toolbar h2,
 .section-heading h2,
 .section-heading h3,
 .history-panel h3,
@@ -155,19 +151,11 @@ button {
   margin-top: 1rem;
 }
 
-.board-toolbar p,
 .section-heading p,
 .save-item p,
 .hint {
   margin: 0.3rem 0 0;
   color: rgba(45, 35, 28, 0.68);
-}
-
-.board-chip-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-top: 0.85rem;
 }
 
 .board-chip {
@@ -184,10 +172,9 @@ button {
 
 .board-stage {
   display: grid;
-  grid-template-columns: 6.6rem minmax(0, 1fr);
-  gap: 1rem;
+  grid-template-columns: 2.8rem minmax(0, 1fr);
+  gap: 0.8rem;
   align-items: stretch;
-  margin-top: 1rem;
 }
 
 .board-stack {
@@ -201,84 +188,48 @@ button {
   margin-top: 0;
 }
 
-.player-rail {
+.turn-marker-column {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  min-height: 100%;
-  gap: 0.75rem;
+  gap: 0.5rem;
 }
 
-.player-rail-line {
+.turn-marker-spacer {
   flex: 1 1 auto;
-  width: 1px;
-  margin: 0 auto;
-  background:
-    linear-gradient(
-      180deg,
-      rgba(136, 104, 73, 0),
-      rgba(136, 104, 73, 0.22) 20%,
-      rgba(136, 104, 73, 0.22) 80%,
-      rgba(136, 104, 73, 0)
-    );
 }
 
-.player-rail-slot {
-  display: grid;
-  gap: 0.45rem;
-  padding: 0.8rem 0.7rem;
-  border-radius: 1rem;
-  border: 1px solid rgba(82, 61, 45, 0.08);
-  background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.62), rgba(245, 236, 223, 0.56)),
-    rgba(255, 249, 241, 0.58);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.56);
-  transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+.turn-marker-slot {
+  display: flex;
+  justify-content: center;
+  min-height: 2.8rem;
 }
 
-.player-rail-slot.active {
-  border-color: rgba(39, 85, 77, 0.26);
-  background:
-    linear-gradient(145deg, rgba(230, 246, 242, 0.76), rgba(247, 239, 225, 0.68)),
-    rgba(255, 249, 241, 0.68);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.62),
-    0 10px 18px rgba(39, 85, 77, 0.08);
-}
-
-.player-rail-copy {
-  display: grid;
-  gap: 0.18rem;
-}
-
-.player-rail-name {
-  font-size: 0.86rem;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: rgba(42, 31, 24, 0.88);
-}
-
-.player-rail-note {
-  font-size: 0.76rem;
-  color: rgba(72, 56, 42, 0.66);
-}
-
-.player-rail-score {
-  display: inline-flex;
-  align-items: center;
-  width: fit-content;
-  padding: 0.18rem 0.48rem;
+.turn-marker {
+  display: inline-grid;
+  place-items: center;
+  width: 2.4rem;
+  height: 2.4rem;
   border-radius: 999px;
-  background: rgba(39, 85, 77, 0.12);
-  color: var(--accent-strong);
-  font-size: 0.78rem;
-  font-weight: 800;
+  border: 1px solid rgba(82, 61, 45, 0.1);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.78), rgba(246, 236, 222, 0.72)),
+    rgba(255, 248, 240, 0.68);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.64),
+    0 10px 18px rgba(66, 43, 25, 0.08);
+}
+
+.piece-render.turn-marker-piece {
+  width: 1.55rem;
+  height: 1.55rem;
 }
 
 .captured-tray {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
   width: min(100%, 760px);
   margin: 0 auto;
   padding: 0.48rem 0.72rem;
@@ -298,6 +249,18 @@ button {
   flex: 1 1 auto;
   flex-wrap: wrap;
   min-width: 0;
+}
+
+.captured-score {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  padding: 0.18rem 0.48rem;
+  border-radius: 999px;
+  background: rgba(39, 85, 77, 0.12);
+  color: var(--accent-strong);
+  font-size: 0.78rem;
+  font-weight: 800;
 }
 
 .captured-empty {
@@ -1043,27 +1006,9 @@ button {
     grid-template-columns: 1fr;
   }
 
-  .player-rail {
+  .turn-marker-column {
     flex-direction: row;
-    align-items: stretch;
-  }
-
-  .player-rail-line {
-    width: auto;
-    height: 1px;
-    margin: auto 0;
-    background:
-      linear-gradient(
-        90deg,
-        rgba(136, 104, 73, 0),
-        rgba(136, 104, 73, 0.22) 20%,
-        rgba(136, 104, 73, 0.22) 80%,
-        rgba(136, 104, 73, 0)
-      );
-  }
-
-  .player-rail-slot {
-    flex: 1 1 0;
+    justify-content: space-between;
   }
 }
 
@@ -1077,9 +1022,7 @@ button {
     padding: 1rem;
   }
 
-  .board-toolbar,
   .section-heading,
-  .board-chip-row,
   .customize-summary,
   .captured-tray,
   .save-form,

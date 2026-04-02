@@ -131,6 +131,7 @@ function createSaveId() {
 function CapturedTray({
   lossColor,
   pieces,
+  lead,
   pieceStyle,
   animatedCapture,
 }) {
@@ -165,45 +166,22 @@ function CapturedTray({
           ))
         )}
       </div>
+      {lead > 0 ? <span className="captured-score">+{lead}</span> : null}
     </div>
   );
 }
 
-function PlayerRailSlot({
-  color,
-  activeColor,
-  mode,
-  lead,
-  inCheck,
-}) {
-  const isActive = color === activeColor;
-  const label = color === 'w' ? 'White' : 'Black';
-  const note = isActive
-    ? mode === 'game'
-      ? inCheck
-        ? 'To move · Check'
-        : 'To move'
-      : 'Setup turn'
-    : mode === 'game'
-      ? 'Waiting'
-      : 'Standby';
-
+function TurnMarker({ active, pieceStyle, piece }) {
   return (
-    <div
-      className={[
-        'player-rail-slot',
-        color === 'w' ? 'white-side' : 'black-side',
-        isActive ? 'active' : '',
-      ]
-        .filter(Boolean)
-        .join(' ')}
-    >
-      <div className="player-rail-copy">
-        <span className="player-rail-name">{label}</span>
-        <span className="player-rail-note">{note}</span>
-      </div>
-      {mode === 'game' && lead > 0 ? (
-        <span className="player-rail-score">+{lead}</span>
+    <div className={active ? 'turn-marker-slot active' : 'turn-marker-slot'}>
+      {active ? (
+        <div className="turn-marker" title={`${PIECE_LABELS[piece]} to move`}>
+          <ChessPiece
+            piece={piece}
+            pieceStyle={pieceStyle}
+            className="turn-marker-piece"
+          />
+        </div>
       ) : null}
     </div>
   );
@@ -246,8 +224,7 @@ export default function App() {
       : [];
   const setupFen = boardMapToFen(setupState.position, setupState.turn);
   const setupValidation = safeValidateFen(setupFen);
-  const boardPerspective =
-    orientation === 'w' ? 'White pieces at bottom' : 'Black pieces at bottom';
+  const activeTurnPiece = `${activeTurnColor}K`;
   const activePieceStyleLabel =
     PIECE_STYLE_OPTIONS.find((option) => option.value === pieceStyle)?.label ??
     'Wood + Ivory';
@@ -571,56 +548,18 @@ export default function App() {
 
       <main className="layout">
         <section className="board-panel card">
-          <div className="board-toolbar">
-            <div>
-              <h2>Board</h2>
-              <p>{message}</p>
-              <div className="board-chip-row">
-                <span className="board-chip">{boardPerspective}</span>
-                <span className="board-chip">
-                  {mode === 'game'
-                    ? `${moveList.length} move${moveList.length === 1 ? '' : 's'} recorded`
-                    : `${Object.keys(setupState.position).length} pieces on board`}
-                </span>
-                <span className="board-chip">{activeBoardStyleLabel} board</span>
-                <span className="board-chip">{activePieceStyleLabel} pieces</span>
-              </div>
-            </div>
-            <button
-              className="ghost-button"
-              type="button"
-              onClick={() =>
-                setOrientation((current) => (current === 'w' ? 'b' : 'w'))
-              }
-            >
-              Flip Board
-            </button>
-          </div>
-
           <div className="board-stage">
-            <aside className="player-rail" aria-label="Player status">
-              <PlayerRailSlot
-                color={topCaptureColor}
-                activeColor={activeTurnColor}
-                mode={mode}
-                lead={materialBalance[topCaptureColor]}
-                inCheck={
-                  mode === 'game' &&
-                  chess.inCheck() &&
-                  activeTurnColor === topCaptureColor
-                }
+            <aside className="turn-marker-column" aria-label={`${PIECE_LABELS[activeTurnPiece]} to move`}>
+              <TurnMarker
+                active={activeTurnColor === topCaptureColor}
+                pieceStyle={pieceStyle}
+                piece={activeTurnPiece}
               />
-              <div className="player-rail-line" aria-hidden="true" />
-              <PlayerRailSlot
-                color={bottomCaptureColor}
-                activeColor={activeTurnColor}
-                mode={mode}
-                lead={materialBalance[bottomCaptureColor]}
-                inCheck={
-                  mode === 'game' &&
-                  chess.inCheck() &&
-                  activeTurnColor === bottomCaptureColor
-                }
+              <div className="turn-marker-spacer" aria-hidden="true" />
+              <TurnMarker
+                active={activeTurnColor === bottomCaptureColor}
+                pieceStyle={pieceStyle}
+                piece={activeTurnPiece}
               />
             </aside>
 
@@ -629,6 +568,7 @@ export default function App() {
                 <CapturedTray
                   lossColor={topCaptureColor}
                   pieces={capturedPieces[topCaptureColor]}
+                  lead={materialBalance[topCaptureColor]}
                   pieceStyle={pieceStyle}
                   animatedCapture={captureAnimation}
                 />
@@ -691,6 +631,7 @@ export default function App() {
                 <CapturedTray
                   lossColor={bottomCaptureColor}
                   pieces={capturedPieces[bottomCaptureColor]}
+                  lead={materialBalance[bottomCaptureColor]}
                   pieceStyle={pieceStyle}
                   animatedCapture={captureAnimation}
                 />
@@ -710,6 +651,15 @@ export default function App() {
             </button>
             <button className="ghost-button" type="button" onClick={copyGameToSetup}>
               Copy To Setup
+            </button>
+            <button
+              className="ghost-button"
+              type="button"
+              onClick={() =>
+                setOrientation((current) => (current === 'w' ? 'b' : 'w'))
+              }
+            >
+              Flip Board
             </button>
           </div>
 
