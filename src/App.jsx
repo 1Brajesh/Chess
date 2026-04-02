@@ -32,6 +32,7 @@ import {
 
 const APP_STORAGE_KEY = 'chess-board-session-v1';
 const SAVES_STORAGE_KEY = 'chess-board-saves-v1';
+const DISPLAY_PREFS_VERSION = 2;
 
 const PALETTE_PIECES = [
   'wK',
@@ -72,11 +73,18 @@ function loadPersistedApp() {
 
     const parsed = JSON.parse(raw);
 
+    const pieceStyle =
+      parsed.displayPrefsVersion === DISPLAY_PREFS_VERSION
+        ? normalizePieceStyle(parsed.pieceStyle)
+        : parsed.pieceStyle == null || parsed.pieceStyle === 'classic'
+          ? DEFAULT_PIECE_STYLE
+          : normalizePieceStyle(parsed.pieceStyle);
+
     return {
       mode: parsed.mode === 'setup' ? 'setup' : 'game',
       orientation: parsed.orientation === 'b' ? 'b' : 'w',
       boardStyle: normalizeBoardStyle(parsed.boardStyle),
-      pieceStyle: normalizePieceStyle(parsed.pieceStyle),
+      pieceStyle,
       gameState: normalizeGameState(parsed.gameState),
       setupState: normalizeSetupState(parsed.setupState),
     };
@@ -159,7 +167,7 @@ export default function App() {
     orientation === 'w' ? 'White pieces at bottom' : 'Black pieces at bottom';
   const activePieceStyleLabel =
     PIECE_STYLE_OPTIONS.find((option) => option.value === pieceStyle)?.label ??
-    'Classic';
+    'Staunton Real';
   const activeBoardStyleLabel =
     BOARD_STYLE_OPTIONS.find((option) => option.value === boardStyle)?.label ??
     'Walnut';
@@ -172,6 +180,7 @@ export default function App() {
         orientation,
         boardStyle,
         pieceStyle,
+        displayPrefsVersion: DISPLAY_PREFS_VERSION,
         gameState,
         setupState,
       }),

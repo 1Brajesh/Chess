@@ -1,6 +1,11 @@
-export const DEFAULT_PIECE_STYLE = 'classic';
+export const DEFAULT_PIECE_STYLE = 'staunton';
 
 export const PIECE_STYLE_OPTIONS = [
+  {
+    value: 'staunton',
+    label: 'Staunton Real',
+    description: 'Classic realistic tournament piece set',
+  },
   {
     value: 'classic',
     label: 'Classic',
@@ -25,4 +30,3 @@ const PIECE_STYLE_SET = new Set(
 export function normalizePieceStyle(candidate) {
   return PIECE_STYLE_SET.has(candidate) ? candidate : DEFAULT_PIECE_STYLE;
 }
-
