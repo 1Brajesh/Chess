@@ -23,18 +23,6 @@ import {
   GiChessQueen,
   GiChessRook,
 } from 'react-icons/gi';
-import stauntonBlackBishop from '../assets/pieces/staunton/bB.svg';
-import stauntonBlackKing from '../assets/pieces/staunton/bK.svg';
-import stauntonBlackKnight from '../assets/pieces/staunton/bN.svg';
-import stauntonBlackPawn from '../assets/pieces/staunton/bP.svg';
-import stauntonBlackQueen from '../assets/pieces/staunton/bQ.svg';
-import stauntonBlackRook from '../assets/pieces/staunton/bR.svg';
-import stauntonWhiteBishop from '../assets/pieces/staunton/wB.svg';
-import stauntonWhiteKing from '../assets/pieces/staunton/wK.svg';
-import stauntonWhiteKnight from '../assets/pieces/staunton/wN.svg';
-import stauntonWhitePawn from '../assets/pieces/staunton/wP.svg';
-import stauntonWhiteQueen from '../assets/pieces/staunton/wQ.svg';
-import stauntonWhiteRook from '../assets/pieces/staunton/wR.svg';
 import { DEFAULT_PIECE_STYLE, normalizePieceStyle } from '../lib/pieceStyles.js';
 
 const ICONS_BY_STYLE = {
@@ -64,20 +52,63 @@ const ICONS_BY_STYLE = {
   },
 };
 
-const IMAGE_BY_PIECE = {
-  wK: stauntonWhiteKing,
-  wQ: stauntonWhiteQueen,
-  wR: stauntonWhiteRook,
-  wB: stauntonWhiteBishop,
-  wN: stauntonWhiteKnight,
-  wP: stauntonWhitePawn,
-  bK: stauntonBlackKing,
-  bQ: stauntonBlackQueen,
-  bR: stauntonBlackRook,
-  bB: stauntonBlackBishop,
-  bN: stauntonBlackKnight,
-  bP: stauntonBlackPawn,
+const ASSET_MODULES = import.meta.glob('../assets/pieces/*/*.{png,svg}', {
+  eager: true,
+  import: 'default',
+});
+
+const PIECE_CODE_BY_FILENAME = {
+  wK: 'wK',
+  wQ: 'wQ',
+  wR: 'wR',
+  wB: 'wB',
+  wN: 'wN',
+  wP: 'wP',
+  bK: 'bK',
+  bQ: 'bQ',
+  bR: 'bR',
+  bB: 'bB',
+  bN: 'bN',
+  bP: 'bP',
+  WhiteKing: 'wK',
+  WhiteQueen: 'wQ',
+  WhiteRook: 'wR',
+  WhiteBishop: 'wB',
+  WhiteKnight: 'wN',
+  WhitePawn: 'wP',
+  BlackKing: 'bK',
+  BlackQueen: 'bQ',
+  BlackRook: 'bR',
+  BlackBishop: 'bB',
+  BlackKnight: 'bN',
+  BlackPawn: 'bP',
 };
+
+function buildAssetPieceMap() {
+  return Object.entries(ASSET_MODULES).reduce((styles, [path, source]) => {
+    const match = path.match(/\/pieces\/([^/]+)\/([A-Za-z0-9_-]+)\.(png|svg)$/);
+
+    if (!match) {
+      return styles;
+    }
+
+    const [, style, fileStem] = match;
+    const pieceCode = PIECE_CODE_BY_FILENAME[fileStem];
+
+    if (!pieceCode) {
+      return styles;
+    }
+
+    if (!styles[style]) {
+      styles[style] = {};
+    }
+
+    styles[style][pieceCode] = source;
+    return styles;
+  }, {});
+}
+
+const IMAGE_BY_STYLE = buildAssetPieceMap();
 
 export default function ChessPiece({
   piece,
@@ -87,14 +118,13 @@ export default function ChessPiece({
   const [imageFailed, setImageFailed] = useState(false);
 
   const resolvedStyle = normalizePieceStyle(pieceStyle);
+  const usesImageAssets = IMAGE_BY_STYLE[resolvedStyle] != null;
   const colorClass = piece?.startsWith('w') ? 'white' : 'black';
-  const imageSource = piece ? IMAGE_BY_PIECE[piece] : null;
+  const imageSource = piece ? IMAGE_BY_STYLE[resolvedStyle]?.[piece] : null;
   const Icon =
-    piece && resolvedStyle === 'staunton'
-      ? ICONS_BY_STYLE.classic[piece[1]]
-      : piece
-        ? ICONS_BY_STYLE[resolvedStyle][piece[1]]
-        : null;
+    piece
+      ? (ICONS_BY_STYLE[resolvedStyle] ?? ICONS_BY_STYLE.classic)[piece[1]]
+      : null;
 
   useEffect(() => {
     setImageFailed(false);
@@ -115,7 +145,7 @@ export default function ChessPiece({
         .filter(Boolean)
         .join(' ')}
     >
-      {resolvedStyle === 'staunton' && imageSource && !imageFailed ? (
+      {usesImageAssets && imageSource && !imageFailed ? (
         <img
           src={imageSource}
           className="piece-image"

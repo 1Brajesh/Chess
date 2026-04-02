@@ -6,7 +6,8 @@ import {
 } from '../src/lib/pieceStyles.js';
 
 test('normalizePieceStyle accepts supported piece styles', () => {
-  assert.equal(normalizePieceStyle('staunton'), 'staunton');
+  assert.equal(normalizePieceStyle('wood'), 'wood');
+  assert.equal(normalizePieceStyle('neo-wood'), 'neo-wood');
   assert.equal(normalizePieceStyle('classic'), 'classic');
   assert.equal(normalizePieceStyle('outline'), 'outline');
   assert.equal(normalizePieceStyle('ornate'), 'ornate');

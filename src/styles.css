@@ -485,8 +485,9 @@ button {
   height: 78%;
 }
 
-.board-square .piece-render.style-staunton {
-  width: 82%;
+.board-square .piece-render.style-wood,
+.board-square .piece-render.style-neo-wood {
+  width: 86%;
   height: 82%;
 }
 
@@ -505,9 +506,11 @@ button {
   filter: drop-shadow(0 8px 12px rgba(41, 24, 14, 0.18));
 }
 
-.piece-render.style-staunton.white,
-.piece-render.style-staunton.black {
-  filter: drop-shadow(0 8px 10px rgba(38, 24, 16, 0.16));
+.piece-render.style-wood.white,
+.piece-render.style-wood.black,
+.piece-render.style-neo-wood.white,
+.piece-render.style-neo-wood.black {
+  filter: drop-shadow(0 10px 12px rgba(38, 24, 16, 0.2));
 }
 
 .square-rank,

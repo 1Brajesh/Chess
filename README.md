@@ -8,6 +8,7 @@ A React chess board with:
 - undo and rewind to the start
 - setup/editor mode for custom positions
 - local save/load in the browser
+- selectable board and piece styles
 
 ## Local development
 
@@ -30,3 +31,7 @@ If GitHub Pages is not already enabled for the repository:
 2. Open `Pages`
 3. Set the source to `GitHub Actions`
 
+## Asset Credits
+
+- `Wood + Ivory` and `Neo Wood` piece sets are vendored from `chess-fen2img` (MIT).
+- The `chess-fen2img` package README credits the underlying piece images to [Marcel van Kervinck](https://marcelk.net/chess/pieces/) and [GiorgioMegrelli](https://github.com/GiorgioMegrelli/chess.com-boards-and-pieces).

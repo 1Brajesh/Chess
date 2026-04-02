@@ -1,10 +1,15 @@
-export const DEFAULT_PIECE_STYLE = 'staunton';
+export const DEFAULT_PIECE_STYLE = 'wood';
 
 export const PIECE_STYLE_OPTIONS = [
   {
-    value: 'staunton',
-    label: 'Staunton Real',
-    description: 'Classic realistic tournament piece set',
+    value: 'wood',
+    label: 'Wood + Ivory',
+    description: 'Transparent PNG chessmen with carved wood shading',
+  },
+  {
+    value: 'neo-wood',
+    label: 'Neo Wood',
+    description: 'Sharper wood-grain PNG chessmen with ivory highlights',
   },
   {
     value: 'classic',
