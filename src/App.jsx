@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
   PIECE_LABELS,
-  PIECE_SYMBOLS,
   STANDARD_START_FEN,
   boardMapToFen,
   buildChess,
@@ -19,6 +18,7 @@ import {
   safeValidateFen,
   serializeGameSummary,
 } from './lib/chess.js';
+import ChessPiece from './components/ChessPiece.jsx';
 
 const APP_STORAGE_KEY = 'chess-board-session-v1';
 const SAVES_STORAGE_KEY = 'chess-board-saves-v1';
@@ -139,6 +139,8 @@ export default function App() {
             ? 'Position can start a game.'
             : 'Position needs both kings and a valid layout.'
         }`;
+  const boardPerspective =
+    orientation === 'w' ? 'White pieces at bottom' : 'Black pieces at bottom';
 
   useEffect(() => {
     window.localStorage.setItem(
@@ -423,6 +425,14 @@ export default function App() {
             <div>
               <h2>Board</h2>
               <p>{message}</p>
+              <div className="board-chip-row">
+                <span className="board-chip">{boardPerspective}</span>
+                <span className="board-chip">
+                  {mode === 'game'
+                    ? `${moveList.length} move${moveList.length === 1 ? '' : 's'} recorded`
+                    : `${setupState.turn === 'w' ? 'White' : 'Black'} to move`}
+                </span>
+              </div>
             </div>
             <button
               className="ghost-button"
@@ -478,7 +488,7 @@ export default function App() {
                       {fileLabel ? (
                         <span className="square-file">{fileLabel}</span>
                       ) : null}
-                      <span className="piece">{piece ? PIECE_SYMBOLS[piece] : ''}</span>
+                      {piece ? <ChessPiece piece={piece} /> : null}
                     </button>
                   );
                 }),
@@ -521,9 +531,7 @@ export default function App() {
                           )
                         }
                       >
-                        <span className="promotion-piece">
-                          {PIECE_SYMBOLS[pieceCode]}
-                        </span>
+                        <ChessPiece piece={pieceCode} className="promotion-piece" />
                         {PIECE_LABELS[pieceCode]}
                       </button>
                     );
@@ -579,7 +587,11 @@ export default function App() {
                       onClick={() => setSelectedPalettePiece(piece)}
                     >
                       <span className="palette-symbol">
-                        {piece === 'erase' ? '×' : PIECE_SYMBOLS[piece]}
+                        {piece === 'erase' ? (
+                          <span className="erase-symbol">×</span>
+                        ) : (
+                          <ChessPiece piece={piece} className="palette-piece" />
+                        )}
                       </span>
                       <span>{PIECE_LABELS[piece]}</span>
                     </button>
@@ -703,4 +715,3 @@ export default function App() {
     </div>
   );
 }
-
