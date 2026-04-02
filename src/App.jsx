@@ -171,9 +171,17 @@ function CapturedTray({
   );
 }
 
-function TurnMarker({ active, title }) {
+function TurnMarker({ active, title, position }) {
   return (
-    <div className={active ? 'turn-marker-slot active' : 'turn-marker-slot'}>
+    <div
+      className={[
+        'turn-marker-slot',
+        position,
+        active ? 'active' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
+    >
       {active ? (
         <div className="turn-marker" title={title} aria-label={title} />
       ) : null}
@@ -543,18 +551,6 @@ export default function App() {
       <main className="layout">
         <section className="board-panel card">
           <div className="board-stage">
-            <aside className="turn-marker-column" aria-label={activeTurnLabel}>
-              <TurnMarker
-                active={activeTurnColor === topCaptureColor}
-                title={activeTurnLabel}
-              />
-              <div className="turn-marker-spacer" aria-hidden="true" />
-              <TurnMarker
-                active={activeTurnColor === bottomCaptureColor}
-                title={activeTurnLabel}
-              />
-            </aside>
-
             <div className="board-stack">
               {mode === 'game' ? (
                 <CapturedTray
@@ -566,56 +562,71 @@ export default function App() {
                 />
               ) : null}
 
-              <div className={['board-frame', `board-style-${boardStyle}`].join(' ')}>
-                <div className="board-grid" role="grid" aria-label="Chess board">
-                  {boardRows.map((row, rowIndex) =>
-                    row.map((square, columnIndex) => {
-                      const piece = boardState.position[square];
-                      const isSelected = selectedSquare === square;
-                      const isTarget = legalTargets.includes(square);
-                      const isLastMoveSquare =
-                        lastMove &&
-                        (lastMove.from === square || lastMove.to === square);
-                      const rankLabel = columnIndex === 0 ? square[1] : '';
-                      const fileLabel =
-                        rowIndex === boardRows.length - 1 ? square[0] : '';
+              <div className="board-core">
+                <aside className="turn-marker-column" aria-label={activeTurnLabel}>
+                  <TurnMarker
+                    active={activeTurnColor === topCaptureColor}
+                    title={activeTurnLabel}
+                    position="top"
+                  />
+                  <TurnMarker
+                    active={activeTurnColor === bottomCaptureColor}
+                    title={activeTurnLabel}
+                    position="bottom"
+                  />
+                </aside>
 
-                      return (
-                        <button
-                          key={square}
-                          type="button"
-                          className={[
-                            'board-square',
-                            isLightSquare(square) ? 'light' : 'dark',
-                            isSelected ? 'selected' : '',
-                            isTarget ? 'target' : '',
-                            isLastMoveSquare ? 'last-move' : '',
-                          ]
-                            .filter(Boolean)
-                            .join(' ')}
-                          onClick={() => handleSquareClick(square)}
-                          onDragOver={(event) => event.preventDefault()}
-                          onDrop={() => handleDrop(square)}
-                          draggable={mode === 'game' && Boolean(piece)}
-                          onDragStart={() => handleDragStart(square)}
-                          onDragEnd={() => setDragSquare(null)}
-                          aria-label={`${square} ${
-                            piece ? PIECE_LABELS[piece] : 'empty square'
-                          }`}
-                        >
-                          {rankLabel ? (
-                            <span className="square-rank">{rankLabel}</span>
-                          ) : null}
-                          {fileLabel ? (
-                            <span className="square-file">{fileLabel}</span>
-                          ) : null}
-                          {piece ? (
-                            <ChessPiece piece={piece} pieceStyle={pieceStyle} />
-                          ) : null}
-                        </button>
-                      );
-                    }),
-                  )}
+                <div className={['board-frame', `board-style-${boardStyle}`].join(' ')}>
+                  <div className="board-grid" role="grid" aria-label="Chess board">
+                    {boardRows.map((row, rowIndex) =>
+                      row.map((square, columnIndex) => {
+                        const piece = boardState.position[square];
+                        const isSelected = selectedSquare === square;
+                        const isTarget = legalTargets.includes(square);
+                        const isLastMoveSquare =
+                          lastMove &&
+                          (lastMove.from === square || lastMove.to === square);
+                        const rankLabel = columnIndex === 0 ? square[1] : '';
+                        const fileLabel =
+                          rowIndex === boardRows.length - 1 ? square[0] : '';
+
+                        return (
+                          <button
+                            key={square}
+                            type="button"
+                            className={[
+                              'board-square',
+                              isLightSquare(square) ? 'light' : 'dark',
+                              isSelected ? 'selected' : '',
+                              isTarget ? 'target' : '',
+                              isLastMoveSquare ? 'last-move' : '',
+                            ]
+                              .filter(Boolean)
+                              .join(' ')}
+                            onClick={() => handleSquareClick(square)}
+                            onDragOver={(event) => event.preventDefault()}
+                            onDrop={() => handleDrop(square)}
+                            draggable={mode === 'game' && Boolean(piece)}
+                            onDragStart={() => handleDragStart(square)}
+                            onDragEnd={() => setDragSquare(null)}
+                            aria-label={`${square} ${
+                              piece ? PIECE_LABELS[piece] : 'empty square'
+                            }`}
+                          >
+                            {rankLabel ? (
+                              <span className="square-rank">{rankLabel}</span>
+                            ) : null}
+                            {fileLabel ? (
+                              <span className="square-file">{fileLabel}</span>
+                            ) : null}
+                            {piece ? (
+                              <ChessPiece piece={piece} pieceStyle={pieceStyle} />
+                            ) : null}
+                          </button>
+                        );
+                      }),
+                    )}
+                  </div>
                 </div>
               </div>
 
