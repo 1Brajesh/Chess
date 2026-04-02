@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   PIECE_LABELS,
   STANDARD_START_FEN,
@@ -6,7 +6,9 @@ import {
   buildChess,
   createGameState,
   getBoardRows,
+  getCapturedPieces,
   getLastMove,
+  getMaterialBalance,
   getMoveChoices,
   getPieceColor,
   getPromotionChoices,
@@ -127,6 +129,52 @@ function createSaveId() {
   return `save-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
+function CapturedTray({
+  lossColor,
+  pieces,
+  lead,
+  pieceStyle,
+  animatedCapture,
+}) {
+  const label = lossColor === 'w' ? 'White captured' : 'Black captured';
+
+  return (
+    <div className="captured-tray" aria-label={`${label} pieces`}>
+      <div className="captured-tray-meta">
+        <span className="captured-tray-label">{label}</span>
+        {lead > 0 ? <span className="captured-score">+{lead}</span> : null}
+      </div>
+      <div className="captured-piece-list">
+        {pieces.length === 0 ? (
+          <span className="captured-empty">No captures</span>
+        ) : (
+          pieces.map((piece, index) => (
+            <span
+              key={`${piece}-${index}`}
+              className={[
+                'captured-piece-item',
+                animatedCapture?.color === lossColor &&
+                animatedCapture?.piece === piece &&
+                animatedCapture?.index === index
+                  ? 'capture-pop'
+                  : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
+            >
+              <ChessPiece
+                piece={piece}
+                pieceStyle={pieceStyle}
+                className="captured-piece"
+              />
+            </span>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [persisted] = useState(loadPersistedApp);
   const [mode, setMode] = useState(persisted.mode);
@@ -144,6 +192,8 @@ export default function App() {
   const [selectedPalettePiece, setSelectedPalettePiece] = useState('wP');
   const [saveName, setSaveName] = useState('');
   const [message, setMessage] = useState('Board ready.');
+  const [captureAnimation, setCaptureAnimation] = useState(null);
+  const previousMoveCountRef = useRef(persisted.gameState.moves.length);
 
   const chess = buildChess(gameState);
   const gameBoard = parseFen(chess.fen());
@@ -151,6 +201,10 @@ export default function App() {
   const boardRows = getBoardRows(orientation);
   const moveList = chess.history();
   const lastMove = getLastMove(gameState);
+  const capturedPieces = getCapturedPieces(gameState);
+  const materialBalance = getMaterialBalance(capturedPieces);
+  const topCaptureColor = orientation === 'w' ? 'b' : 'w';
+  const bottomCaptureColor = orientation === 'w' ? 'w' : 'b';
   const legalTargets =
     mode === 'game' && selectedSquare
       ? getMoveChoices(chess, selectedSquare).map((move) => move.to)
@@ -198,6 +252,47 @@ export default function App() {
     setPendingPromotion(null);
     setDragSquare(null);
   }, [mode]);
+
+  useEffect(() => {
+    const previousMoveCount = previousMoveCountRef.current;
+    const currentMoveCount = gameState.moves.length;
+
+    if (mode !== 'game') {
+      setCaptureAnimation(null);
+      previousMoveCountRef.current = currentMoveCount;
+      return;
+    }
+
+    if (currentMoveCount < previousMoveCount) {
+      setCaptureAnimation(null);
+    }
+
+    if (currentMoveCount > previousMoveCount && lastMove?.captured) {
+      const lossColor = lastMove.color === 'w' ? 'b' : 'w';
+      const capturedPiece = `${lossColor}${lastMove.captured.toUpperCase()}`;
+      const trayPieces = capturedPieces[lossColor];
+      const index = trayPieces.findLastIndex((piece) => piece === capturedPiece);
+      const nextAnimation = {
+        color: lossColor,
+        piece: capturedPiece,
+        index,
+        moveCount: currentMoveCount,
+      };
+
+      setCaptureAnimation(nextAnimation);
+      previousMoveCountRef.current = currentMoveCount;
+
+      const timeoutId = window.setTimeout(() => {
+        setCaptureAnimation((current) =>
+          current?.moveCount === currentMoveCount ? null : current,
+        );
+      }, 900);
+
+      return () => window.clearTimeout(timeoutId);
+    }
+
+    previousMoveCountRef.current = currentMoveCount;
+  }, [capturedPieces, gameState.moves.length, lastMove, mode]);
 
   function attemptMove(from, to, promotion) {
     const promotionChoices = getPromotionChoices(chess, from, to);
@@ -481,6 +576,16 @@ export default function App() {
             </button>
           </div>
 
+          {mode === 'game' ? (
+            <CapturedTray
+              lossColor={topCaptureColor}
+              pieces={capturedPieces[topCaptureColor]}
+              lead={materialBalance[topCaptureColor]}
+              pieceStyle={pieceStyle}
+              animatedCapture={captureAnimation}
+            />
+          ) : null}
+
           <div className={['board-frame', `board-style-${boardStyle}`].join(' ')}>
             <div className="board-grid" role="grid" aria-label="Chess board">
               {boardRows.map((row, rowIndex) =>
@@ -533,6 +638,16 @@ export default function App() {
               )}
             </div>
           </div>
+
+          {mode === 'game' ? (
+            <CapturedTray
+              lossColor={bottomCaptureColor}
+              pieces={capturedPieces[bottomCaptureColor]}
+              lead={materialBalance[bottomCaptureColor]}
+              pieceStyle={pieceStyle}
+              animatedCapture={captureAnimation}
+            />
+          ) : null}
 
           <div className="board-actions">
             <button className="primary-button" type="button" onClick={startNewGame}>

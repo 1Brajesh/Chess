@@ -67,6 +67,24 @@ const PIECE_TO_FEN = {
   wP: 'P',
 };
 
+const CAPTURE_DISPLAY_ORDER = {
+  P: 0,
+  N: 1,
+  B: 2,
+  R: 3,
+  Q: 4,
+  K: 5,
+};
+
+const PIECE_MATERIAL = {
+  P: 1,
+  N: 3,
+  B: 3,
+  R: 5,
+  Q: 9,
+  K: 0,
+};
+
 export function createGameState(startFen = STANDARD_START_FEN) {
   return {
     startFen,
@@ -179,6 +197,59 @@ export function getLastMove(gameState) {
   const chess = buildChess(gameState);
   const history = chess.history({ verbose: true });
   return history.at(-1) ?? null;
+}
+
+export function getCapturedPieces(gameState) {
+  const history = buildChess(gameState).history({ verbose: true });
+  const capturedPieces = {
+    w: [],
+    b: [],
+  };
+
+  for (const move of history) {
+    if (!move.captured) {
+      continue;
+    }
+
+    const lostColor = move.color === 'w' ? 'b' : 'w';
+    capturedPieces[lostColor].push(
+      `${lostColor}${move.captured.toUpperCase()}`,
+    );
+  }
+
+  const sortPieces = (pieces) =>
+    [...pieces].sort((left, right) => {
+      const rankDifference =
+        CAPTURE_DISPLAY_ORDER[left[1]] - CAPTURE_DISPLAY_ORDER[right[1]];
+
+      if (rankDifference !== 0) {
+        return rankDifference;
+      }
+
+      return left.localeCompare(right);
+    });
+
+  return {
+    w: sortPieces(capturedPieces.w),
+    b: sortPieces(capturedPieces.b),
+  };
+}
+
+export function getMaterialBalance(capturedPieces) {
+  const countMaterial = (pieces) =>
+    pieces.reduce(
+      (total, piece) => total + (PIECE_MATERIAL[piece[1]] ?? 0),
+      0,
+    );
+
+  const whiteWins = countMaterial(capturedPieces.b);
+  const blackWins = countMaterial(capturedPieces.w);
+  const difference = whiteWins - blackWins;
+
+  return {
+    w: difference < 0 ? Math.abs(difference) : 0,
+    b: difference > 0 ? difference : 0,
+  };
 }
 
 export function safeValidateFen(fen) {

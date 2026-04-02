@@ -4,6 +4,8 @@ import {
   STANDARD_START_FEN,
   boardMapToFen,
   buildChess,
+  getCapturedPieces,
+  getMaterialBalance,
   makeEditorStateFromFen,
   safeValidateFen,
 } from '../src/lib/chess.js';
@@ -35,4 +37,22 @@ test('setup validation rejects positions without kings', () => {
   const validation = safeValidateFen('8/8/8/8/8/8/8/8 w - - 0 1');
 
   assert.equal(validation.valid, false);
+});
+
+test('captured pieces and material balance follow the move history', () => {
+  const gameState = {
+    startFen: STANDARD_START_FEN,
+    moves: [
+      { from: 'e2', to: 'e4' },
+      { from: 'd7', to: 'd5' },
+      { from: 'e4', to: 'd5' },
+      { from: 'd8', to: 'd5' },
+    ],
+  };
+
+  const capturedPieces = getCapturedPieces(gameState);
+
+  assert.deepEqual(capturedPieces.b, ['bP']);
+  assert.deepEqual(capturedPieces.w, ['wP']);
+  assert.deepEqual(getMaterialBalance(capturedPieces), { w: 0, b: 0 });
 });
