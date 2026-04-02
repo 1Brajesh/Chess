@@ -171,17 +171,11 @@ function CapturedTray({
   );
 }
 
-function TurnMarker({ active, pieceStyle, piece }) {
+function TurnMarker({ active, title }) {
   return (
     <div className={active ? 'turn-marker-slot active' : 'turn-marker-slot'}>
       {active ? (
-        <div className="turn-marker" title={`${PIECE_LABELS[piece]} to move`}>
-          <ChessPiece
-            piece={piece}
-            pieceStyle={pieceStyle}
-            className="turn-marker-piece"
-          />
-        </div>
+        <div className="turn-marker" title={title} aria-label={title} />
       ) : null}
     </div>
   );
@@ -224,7 +218,7 @@ export default function App() {
       : [];
   const setupFen = boardMapToFen(setupState.position, setupState.turn);
   const setupValidation = safeValidateFen(setupFen);
-  const activeTurnPiece = `${activeTurnColor}K`;
+  const activeTurnLabel = activeTurnColor === 'w' ? 'White to move' : 'Black to move';
   const activePieceStyleLabel =
     PIECE_STYLE_OPTIONS.find((option) => option.value === pieceStyle)?.label ??
     'Wood + Ivory';
@@ -549,17 +543,15 @@ export default function App() {
       <main className="layout">
         <section className="board-panel card">
           <div className="board-stage">
-            <aside className="turn-marker-column" aria-label={`${PIECE_LABELS[activeTurnPiece]} to move`}>
+            <aside className="turn-marker-column" aria-label={activeTurnLabel}>
               <TurnMarker
                 active={activeTurnColor === topCaptureColor}
-                pieceStyle={pieceStyle}
-                piece={activeTurnPiece}
+                title={activeTurnLabel}
               />
               <div className="turn-marker-spacer" aria-hidden="true" />
               <TurnMarker
                 active={activeTurnColor === bottomCaptureColor}
-                pieceStyle={pieceStyle}
-                piece={activeTurnPiece}
+                title={activeTurnLabel}
               />
             </aside>
 
