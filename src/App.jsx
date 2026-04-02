@@ -411,7 +411,6 @@ export default function App() {
       <header className="hero">
         <div>
           <p className="eyebrow">Client-Side Chess Board</p>
-          <h1>Play, flip, rewind, save, and edit positions locally.</h1>
         </div>
         <div className="hero-status">
           <span className={`mode-pill ${mode}`}>{mode === 'game' ? 'Game mode' : 'Setup mode'}</span>
