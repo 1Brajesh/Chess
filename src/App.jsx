@@ -20,6 +20,11 @@ import {
 } from './lib/chess.js';
 import ChessPiece from './components/ChessPiece.jsx';
 import {
+  BOARD_STYLE_OPTIONS,
+  DEFAULT_BOARD_STYLE,
+  normalizeBoardStyle,
+} from './lib/boardStyles.js';
+import {
   DEFAULT_PIECE_STYLE,
   PIECE_STYLE_OPTIONS,
   normalizePieceStyle,
@@ -48,6 +53,7 @@ function loadPersistedApp() {
   const fallback = {
     mode: 'game',
     orientation: 'w',
+    boardStyle: DEFAULT_BOARD_STYLE,
     pieceStyle: DEFAULT_PIECE_STYLE,
     gameState: createGameState(),
     setupState: makeEditorStateFromFen(STANDARD_START_FEN),
@@ -69,6 +75,7 @@ function loadPersistedApp() {
     return {
       mode: parsed.mode === 'setup' ? 'setup' : 'game',
       orientation: parsed.orientation === 'b' ? 'b' : 'w',
+      boardStyle: normalizeBoardStyle(parsed.boardStyle),
       pieceStyle: normalizePieceStyle(parsed.pieceStyle),
       gameState: normalizeGameState(parsed.gameState),
       setupState: normalizeSetupState(parsed.setupState),
@@ -116,6 +123,7 @@ export default function App() {
   const [persisted] = useState(loadPersistedApp);
   const [mode, setMode] = useState(persisted.mode);
   const [orientation, setOrientation] = useState(persisted.orientation);
+  const [boardStyle, setBoardStyle] = useState(persisted.boardStyle);
   const [pieceStyle, setPieceStyle] = useState(persisted.pieceStyle);
   const [gameState, setGameState] = useState(persisted.gameState);
   const [setupState, setSetupState] = useState(persisted.setupState);
@@ -152,6 +160,9 @@ export default function App() {
   const activePieceStyleLabel =
     PIECE_STYLE_OPTIONS.find((option) => option.value === pieceStyle)?.label ??
     'Classic';
+  const activeBoardStyleLabel =
+    BOARD_STYLE_OPTIONS.find((option) => option.value === boardStyle)?.label ??
+    'Walnut';
 
   useEffect(() => {
     window.localStorage.setItem(
@@ -159,12 +170,13 @@ export default function App() {
       JSON.stringify({
         mode,
         orientation,
+        boardStyle,
         pieceStyle,
         gameState,
         setupState,
       }),
     );
-  }, [gameState, mode, orientation, pieceStyle, setupState]);
+  }, [boardStyle, gameState, mode, orientation, pieceStyle, setupState]);
 
   useEffect(() => {
     window.localStorage.setItem(SAVES_STORAGE_KEY, JSON.stringify(savedItems));
@@ -443,6 +455,7 @@ export default function App() {
                     ? `${moveList.length} move${moveList.length === 1 ? '' : 's'} recorded`
                     : `${setupState.turn === 'w' ? 'White' : 'Black'} to move`}
                 </span>
+                <span className="board-chip">{activeBoardStyleLabel} board</span>
                 <span className="board-chip">{activePieceStyleLabel} pieces</span>
               </div>
             </div>
@@ -457,7 +470,7 @@ export default function App() {
             </button>
           </div>
 
-          <div className="board-frame">
+          <div className={['board-frame', `board-style-${boardStyle}`].join(' ')}>
             <div className="board-grid" role="grid" aria-label="Chess board">
               {boardRows.map((row, rowIndex) =>
                 row.map((square, columnIndex) => {
@@ -588,6 +601,46 @@ export default function App() {
               >
                 Setup
               </button>
+            </div>
+
+            <div className="board-style-panel">
+              <div className="section-heading compact">
+                <h3>Board Style</h3>
+                <p>Swap the board surface and frame finish.</p>
+              </div>
+              <div className="board-style-grid">
+                {BOARD_STYLE_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    className={
+                      boardStyle === option.value
+                        ? 'board-style-button active'
+                        : 'board-style-button'
+                    }
+                    onClick={() => setBoardStyle(option.value)}
+                  >
+                    <span
+                      className={[
+                        'board-style-preview',
+                        `board-style-${option.value}`,
+                      ].join(' ')}
+                      aria-hidden="true"
+                    >
+                      <span className="board-style-preview-frame">
+                        <span className="board-style-swatch light" />
+                        <span className="board-style-swatch dark" />
+                        <span className="board-style-swatch dark" />
+                        <span className="board-style-swatch light" />
+                      </span>
+                    </span>
+                    <span className="piece-style-copy">
+                      <strong>{option.label}</strong>
+                      <span>{option.description}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div className="piece-style-panel">
