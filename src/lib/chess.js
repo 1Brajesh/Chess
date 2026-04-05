@@ -275,24 +275,45 @@ export function makeEditorStateFromFen(fen) {
   };
 }
 
-export function normalizeSetupState(candidate) {
-  if (!candidate || typeof candidate !== 'object') {
-    return makeEditorStateFromFen(STANDARD_START_FEN);
-  }
+export function makeFreePlayStateFromFen(fen) {
+  const { position } = parseFen(fen);
+  return {
+    position,
+  };
+}
 
+function normalizeBoardPosition(candidatePosition) {
   const nextPosition = {};
 
-  if (candidate.position && typeof candidate.position === 'object') {
-    for (const [square, piece] of Object.entries(candidate.position)) {
+  if (candidatePosition && typeof candidatePosition === 'object') {
+    for (const [square, piece] of Object.entries(candidatePosition)) {
       if (/^[a-h][1-8]$/.test(square) && PIECE_SYMBOLS[piece]) {
         nextPosition[square] = piece;
       }
     }
   }
 
+  return nextPosition;
+}
+
+export function normalizeSetupState(candidate) {
+  if (!candidate || typeof candidate !== 'object') {
+    return makeEditorStateFromFen(STANDARD_START_FEN);
+  }
+
   return {
-    position: nextPosition,
+    position: normalizeBoardPosition(candidate.position),
     turn: candidate.turn === 'b' ? 'b' : 'w',
+  };
+}
+
+export function normalizeFreePlayState(candidate) {
+  if (!candidate || typeof candidate !== 'object') {
+    return makeFreePlayStateFromFen(STANDARD_START_FEN);
+  }
+
+  return {
+    position: normalizeBoardPosition(candidate.position),
   };
 }
 

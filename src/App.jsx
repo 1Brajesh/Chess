@@ -20,7 +20,9 @@ import {
   getPromotionChoices,
   isLightSquare,
   makeEditorStateFromFen,
+  makeFreePlayStateFromFen,
   normalizeGameState,
+  normalizeFreePlayState,
   normalizeSetupState,
   parseFen,
   safeValidateFen,
@@ -79,6 +81,12 @@ const PALETTE_PIECES = [
   'erase',
 ];
 
+const MODE_LABELS = {
+  game: 'Game',
+  setup: 'Setup',
+  freeplay: 'Free Play',
+};
+
 function loadPersistedApp() {
   const fallback = {
     mode: 'game',
@@ -87,6 +95,7 @@ function loadPersistedApp() {
     pieceStyle: DEFAULT_PIECE_STYLE,
     gameState: createGameState(),
     setupState: makeEditorStateFromFen(STANDARD_START_FEN),
+    freePlayState: makeFreePlayStateFromFen(STANDARD_START_FEN),
   };
 
   if (typeof window === 'undefined') {
@@ -110,12 +119,16 @@ function loadPersistedApp() {
           : normalizePieceStyle(parsed.pieceStyle);
 
     return {
-      mode: parsed.mode === 'setup' ? 'setup' : 'game',
+      mode:
+        parsed.mode === 'setup' || parsed.mode === 'freeplay'
+          ? parsed.mode
+          : 'game',
       orientation: parsed.orientation === 'b' ? 'b' : 'w',
       boardStyle: normalizeBoardStyle(parsed.boardStyle),
       pieceStyle,
       gameState: normalizeGameState(parsed.gameState),
       setupState: normalizeSetupState(parsed.setupState),
+      freePlayState: normalizeFreePlayState(parsed.freePlayState),
     };
   } catch {
     return fallback;
@@ -141,7 +154,9 @@ function loadSavedItems() {
         typeof item === 'object' &&
         typeof item.id === 'string' &&
         typeof item.name === 'string' &&
-        (item.type === 'game' || item.type === 'setup'),
+        (item.type === 'game' ||
+          item.type === 'setup' ||
+          item.type === 'freeplay'),
     );
   } catch {
     return [];
@@ -231,11 +246,13 @@ export default function App() {
   const [customizeTab, setCustomizeTab] = useState('board');
   const [gameState, setGameState] = useState(persisted.gameState);
   const [setupState, setSetupState] = useState(persisted.setupState);
+  const [freePlayState, setFreePlayState] = useState(persisted.freePlayState);
   const [savedItems, setSavedItems] = useState(loadSavedItems);
   const [selectedSquare, setSelectedSquare] = useState(null);
   const [pendingPromotion, setPendingPromotion] = useState(null);
   const [dragSquare, setDragSquare] = useState(null);
   const [selectedPalettePiece, setSelectedPalettePiece] = useState('wP');
+  const [isFreePlayPaletteArmed, setIsFreePlayPaletteArmed] = useState(false);
   const [saveName, setSaveName] = useState('');
   const [message, setMessage] = useState('Board ready.');
   const [captureAnimation, setCaptureAnimation] = useState(null);
@@ -244,7 +261,10 @@ export default function App() {
 
   const chess = buildChess(gameState);
   const gameBoard = parseFen(chess.fen());
-  const boardState = mode === 'game' ? gameBoard : setupState;
+  const isSetupMode = mode === 'setup';
+  const isFreePlayMode = mode === 'freeplay';
+  const boardState =
+    mode === 'game' ? gameBoard : isSetupMode ? setupState : freePlayState;
   const boardRows = getBoardRows(orientation);
   const moveList = chess.history();
   const lastMove = getLastMove(gameState);
@@ -252,20 +272,26 @@ export default function App() {
   const materialBalance = getMaterialBalance(capturedPieces);
   const topCaptureColor = orientation === 'w' ? 'b' : 'w';
   const bottomCaptureColor = orientation === 'w' ? 'w' : 'b';
-  const activeTurnColor = mode === 'game' ? chess.turn() : setupState.turn;
+  const activeTurnColor =
+    mode === 'game' ? chess.turn() : isSetupMode ? setupState.turn : null;
   const legalTargets =
     mode === 'game' && selectedSquare
       ? getMoveChoices(chess, selectedSquare).map((move) => move.to)
       : [];
   const setupFen = boardMapToFen(setupState.position, setupState.turn);
   const setupValidation = safeValidateFen(setupFen);
-  const activeTurnLabel = activeTurnColor === 'w' ? 'White to move' : 'Black to move';
+  const activeTurnLabel = isFreePlayMode
+    ? 'Free play board'
+    : activeTurnColor === 'w'
+      ? 'White to move'
+      : 'Black to move';
   const activePieceStyleLabel =
     PIECE_STYLE_OPTIONS.find((option) => option.value === pieceStyle)?.label ??
     'Wood + Ivory';
   const activeBoardStyleLabel =
     BOARD_STYLE_OPTIONS.find((option) => option.value === boardStyle)?.label ??
     'Walnut';
+  const activeModeLabel = MODE_LABELS[mode] ?? 'Game';
   const preferredHostColor = manualHostColor ?? orientation;
   const isOnlineConnected = Boolean(onlineState.roomId);
   const isOnlineBusy =
@@ -287,9 +313,18 @@ export default function App() {
         displayPrefsVersion: DISPLAY_PREFS_VERSION,
         gameState,
         setupState,
+        freePlayState,
       }),
     );
-  }, [boardStyle, gameState, mode, orientation, pieceStyle, setupState]);
+  }, [
+    boardStyle,
+    freePlayState,
+    gameState,
+    mode,
+    orientation,
+    pieceStyle,
+    setupState,
+  ]);
 
   useEffect(() => {
     window.localStorage.setItem(SAVES_STORAGE_KEY, JSON.stringify(savedItems));
@@ -299,6 +334,7 @@ export default function App() {
     setSelectedSquare(null);
     setPendingPromotion(null);
     setDragSquare(null);
+    setIsFreePlayPaletteArmed(false);
   }, [mode]);
 
   async function clearRoomSubscription() {
@@ -828,6 +864,29 @@ export default function App() {
     attemptMove(selectedSquare, square);
   }
 
+  function handlePaletteSelect(piece) {
+    if (isFreePlayMode) {
+      const nextArmed =
+        piece !== selectedPalettePiece || !isFreePlayPaletteArmed;
+
+      setSelectedPalettePiece(piece);
+      setSelectedSquare(null);
+      setIsFreePlayPaletteArmed(nextArmed);
+      setMessage(
+        nextArmed
+          ? piece === 'erase'
+            ? 'Free play placement tool armed. Click a square to clear it.'
+            : `Free play placement tool armed for ${PIECE_LABELS[
+                piece
+              ].toLowerCase()}.`
+          : 'Free play move mode armed.',
+      );
+      return;
+    }
+
+    setSelectedPalettePiece(piece);
+  }
+
   function handleSetupSquareClick(square) {
     setSetupState((current) => {
       const nextPosition = { ...current.position };
@@ -851,16 +910,126 @@ export default function App() {
     );
   }
 
+  function placeFreePlayPiece(square) {
+    setFreePlayState((current) => {
+      const nextPosition = { ...current.position };
+
+      if (selectedPalettePiece === 'erase') {
+        delete nextPosition[square];
+      } else {
+        nextPosition[square] = selectedPalettePiece;
+      }
+
+      return {
+        position: nextPosition,
+      };
+    });
+
+    setSelectedSquare(null);
+    setMessage(
+      selectedPalettePiece === 'erase'
+        ? `${square.toUpperCase()} cleared.`
+        : `${PIECE_LABELS[selectedPalettePiece]} placed on ${square.toUpperCase()}.`,
+    );
+  }
+
+  function moveFreePlayPiece(from, to) {
+    const movingPiece = freePlayState.position[from];
+    const replacedPiece = freePlayState.position[to];
+
+    setDragSquare(null);
+    setSelectedSquare(null);
+    setIsFreePlayPaletteArmed(false);
+
+    if (!movingPiece) {
+      return;
+    }
+
+    if (from === to) {
+      setMessage('Selection cleared.');
+      return;
+    }
+
+    setFreePlayState((current) => {
+      const piece = current.position[from];
+
+      if (!piece) {
+        return current;
+      }
+
+      const nextPosition = { ...current.position };
+      delete nextPosition[from];
+      nextPosition[to] = piece;
+
+      return {
+        position: nextPosition,
+      };
+    });
+
+    setMessage(
+      replacedPiece
+        ? `${PIECE_LABELS[movingPiece]} moved to ${to.toUpperCase()}. ${PIECE_LABELS[
+            replacedPiece
+          ]} removed.`
+        : `${PIECE_LABELS[movingPiece]} moved to ${to.toUpperCase()}.`,
+    );
+  }
+
+  function handleFreePlaySquareClick(square) {
+    if (isFreePlayPaletteArmed) {
+      placeFreePlayPiece(square);
+      return;
+    }
+
+    const piece = freePlayState.position[square];
+
+    if (selectedSquare) {
+      if (selectedSquare === square) {
+        setSelectedSquare(null);
+        setMessage('Selection cleared.');
+        return;
+      }
+
+      moveFreePlayPiece(selectedSquare, square);
+      return;
+    }
+
+    if (!piece) {
+      return;
+    }
+
+    setSelectedSquare(square);
+    setMessage(`${PIECE_LABELS[piece]} selected from ${square.toUpperCase()}.`);
+  }
+
   function handleSquareClick(square) {
     if (mode === 'game') {
       handleGameSquareClick(square);
       return;
     }
 
-    handleSetupSquareClick(square);
+    if (isSetupMode) {
+      handleSetupSquareClick(square);
+      return;
+    }
+
+    handleFreePlaySquareClick(square);
   }
 
   function handleDragStart(square) {
+    if (mode === 'freeplay') {
+      const piece = freePlayState.position[square];
+
+      if (!piece) {
+        return;
+      }
+
+      setIsFreePlayPaletteArmed(false);
+      setDragSquare(square);
+      setSelectedSquare(square);
+      return;
+    }
+
     if (mode !== 'game') {
       return;
     }
@@ -881,7 +1050,16 @@ export default function App() {
   }
 
   function handleDrop(square) {
-    if (mode !== 'game' || !dragSquare) {
+    if (!dragSquare) {
+      return;
+    }
+
+    if (mode === 'freeplay') {
+      moveFreePlayPiece(dragSquare, square);
+      return;
+    }
+
+    if (mode !== 'game') {
       return;
     }
 
@@ -942,17 +1120,33 @@ export default function App() {
     setMessage('Standard game ready.');
   }
 
-  function copyGameToSetup() {
+  function copyCurrentBoardToSetup() {
     if (onlineControlsLocked) {
       setMessage('Setup mode stays local-only. Leave the room first.');
       return;
     }
 
-    setSetupState(makeEditorStateFromFen(chess.fen()));
+    if (isSetupMode) {
+      return;
+    }
+
+    if (mode === 'game') {
+      setSetupState(makeEditorStateFromFen(chess.fen()));
+      setMode('setup');
+      setSelectedSquare(null);
+      setPendingPromotion(null);
+      setMessage('Current game copied into setup mode.');
+      return;
+    }
+
+    setSetupState({
+      position: { ...freePlayState.position },
+      turn: 'w',
+    });
     setMode('setup');
     setSelectedSquare(null);
     setPendingPromotion(null);
-    setMessage('Current board copied into setup mode.');
+    setMessage('Free play board copied into setup mode with White to move.');
   }
 
   function startGameFromSetup() {
@@ -989,10 +1183,27 @@ export default function App() {
     setMessage('Setup board cleared.');
   }
 
+  function resetFreePlayToStandard() {
+    setFreePlayState(makeFreePlayStateFromFen(STANDARD_START_FEN));
+    setSelectedSquare(null);
+    setDragSquare(null);
+    setIsFreePlayPaletteArmed(false);
+    setMessage('Free play reset to the standard chess position.');
+  }
+
+  function clearFreePlayBoard() {
+    setFreePlayState({
+      position: {},
+    });
+    setSelectedSquare(null);
+    setDragSquare(null);
+    setIsFreePlayPaletteArmed(false);
+    setMessage('Free play board cleared.');
+  }
+
   function saveCurrentSnapshot() {
     const name =
-      saveName.trim() ||
-      `${mode === 'game' ? 'Game' : 'Setup'} ${new Date().toLocaleString()}`;
+      saveName.trim() || `${activeModeLabel} ${new Date().toLocaleString()}`;
 
     const nextSave = {
       id: createSaveId(),
@@ -1005,10 +1216,15 @@ export default function App() {
               gameState,
               orientation,
             }
-          : {
-              setupState,
-              orientation,
-            },
+          : isSetupMode
+            ? {
+                setupState,
+                orientation,
+              }
+            : {
+                freePlayState,
+                orientation,
+              },
     };
 
     setSavedItems((current) => [nextSave, ...current]);
@@ -1025,9 +1241,12 @@ export default function App() {
     if (item.type === 'game') {
       setGameState(normalizeGameState(item.payload?.gameState));
       setMode('game');
-    } else {
+    } else if (item.type === 'setup') {
       setSetupState(normalizeSetupState(item.payload?.setupState));
       setMode('setup');
+    } else {
+      setFreePlayState(normalizeFreePlayState(item.payload?.freePlayState));
+      setMode('freeplay');
     }
 
     setOrientation(item.payload?.orientation === 'b' ? 'b' : 'w');
@@ -1083,6 +1302,7 @@ export default function App() {
                         const isSelected = selectedSquare === square;
                         const isTarget = legalTargets.includes(square);
                         const isLastMoveSquare =
+                          mode === 'game' &&
                           lastMove &&
                           (lastMove.from === square || lastMove.to === square);
                         const rankLabel = columnIndex === 0 ? square[1] : '';
@@ -1105,9 +1325,14 @@ export default function App() {
                             onClick={() => handleSquareClick(square)}
                             onDragOver={(event) => event.preventDefault()}
                             onDrop={() => handleDrop(square)}
-                            draggable={mode === 'game' && Boolean(piece)}
+                            draggable={
+                              (mode === 'game' || mode === 'freeplay') &&
+                              Boolean(piece)
+                            }
                             onDragStart={() => handleDragStart(square)}
-                            onDragEnd={() => setDragSquare(null)}
+                            onDragEnd={() => {
+                              setDragSquare(null);
+                            }}
                             aria-label={`${square} ${
                               piece ? PIECE_LABELS[piece] : 'empty square'
                             }`}
@@ -1154,7 +1379,7 @@ export default function App() {
               className="ghost-button"
               type="button"
               onClick={handleUndo}
-              disabled={onlineControlsLocked}
+              disabled={onlineControlsLocked || mode !== 'game'}
             >
               Undo Move
             </button>
@@ -1162,17 +1387,17 @@ export default function App() {
               className="ghost-button"
               type="button"
               onClick={rewindToStart}
-              disabled={onlineControlsLocked}
+              disabled={onlineControlsLocked || mode !== 'game'}
             >
               Rewind To Start
             </button>
             <button
               className="ghost-button"
               type="button"
-              onClick={copyGameToSetup}
-              disabled={onlineControlsLocked}
+              onClick={copyCurrentBoardToSetup}
+              disabled={onlineControlsLocked || isSetupMode}
             >
-              Copy To Setup
+              Copy Board To Setup
             </button>
             <button
               className="ghost-button"
@@ -1379,7 +1604,7 @@ export default function App() {
           <article className="card">
             <div className="section-heading">
               <h2>Mode</h2>
-              <p>Switch between legal play and free setup editing.</p>
+              <p>Switch between legal play, setup editing, and unrestricted free play.</p>
             </div>
             <div className="mode-switch">
               <button
@@ -1397,9 +1622,17 @@ export default function App() {
               >
                 Setup
               </button>
+              <button
+                type="button"
+                className={mode === 'freeplay' ? 'primary-button' : 'ghost-button'}
+                onClick={() => setMode('freeplay')}
+                disabled={!canEditSetup}
+              >
+                Free Play
+              </button>
             </div>
 
-            {mode === 'setup' ? (
+            {isSetupMode || isFreePlayMode ? (
               <>
                 <div className="setup-palette">
                   {PALETTE_PIECES.map((piece) => (
@@ -1407,11 +1640,12 @@ export default function App() {
                       key={piece}
                       type="button"
                       className={
-                        selectedPalettePiece === piece
+                        selectedPalettePiece === piece &&
+                        (isSetupMode || isFreePlayPaletteArmed)
                           ? 'palette-button active'
                           : 'palette-button'
                       }
-                      onClick={() => setSelectedPalettePiece(piece)}
+                      onClick={() => handlePaletteSelect(piece)}
                     >
                       <span className="palette-symbol">
                         {piece === 'erase' ? (
@@ -1429,44 +1663,90 @@ export default function App() {
                   ))}
                 </div>
 
-                <div className="setup-controls">
-                  <button
-                    type="button"
-                    className="ghost-button"
-                    onClick={() =>
-                      setSetupState((current) => ({
-                        ...current,
-                        turn: current.turn === 'w' ? 'b' : 'w',
-                      }))
-                    }
-                  >
-                    Side To Move: {setupState.turn === 'w' ? 'White' : 'Black'}
-                  </button>
-                  <button
-                    type="button"
-                    className="ghost-button"
-                    onClick={resetSetupToStandard}
-                  >
-                    Reset Setup
-                  </button>
-                  <button
-                    type="button"
-                    className="ghost-button"
-                    onClick={clearSetupBoard}
-                  >
-                    Clear Board
-                  </button>
-                  <button
-                    type="button"
-                    className="primary-button"
-                    onClick={startGameFromSetup}
-                  >
-                    Start Game From Setup
-                  </button>
-                </div>
-                <p className={setupValidation.valid ? 'hint ok' : 'hint warning'}>
-                  {setupValidation.message}
-                </p>
+                {isSetupMode ? (
+                  <>
+                    <div className="setup-controls">
+                      <button
+                        type="button"
+                        className="ghost-button"
+                        onClick={() =>
+                          setSetupState((current) => ({
+                            ...current,
+                            turn: current.turn === 'w' ? 'b' : 'w',
+                          }))
+                        }
+                      >
+                        Side To Move: {setupState.turn === 'w' ? 'White' : 'Black'}
+                      </button>
+                      <button
+                        type="button"
+                        className="ghost-button"
+                        onClick={resetSetupToStandard}
+                      >
+                        Reset Setup
+                      </button>
+                      <button
+                        type="button"
+                        className="ghost-button"
+                        onClick={clearSetupBoard}
+                      >
+                        Clear Board
+                      </button>
+                      <button
+                        type="button"
+                        className="primary-button"
+                        onClick={startGameFromSetup}
+                      >
+                        Start Game From Setup
+                      </button>
+                    </div>
+                    <p className={setupValidation.valid ? 'hint ok' : 'hint warning'}>
+                      {setupValidation.message}
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <div className="setup-controls">
+                      <button
+                        type="button"
+                        className={
+                          isFreePlayPaletteArmed ? 'ghost-button' : 'primary-button'
+                        }
+                        onClick={() => {
+                          setIsFreePlayPaletteArmed(false);
+                          setMessage(
+                            'Free play move mode armed. Drag a piece anywhere or click one and choose a square.',
+                          );
+                        }}
+                      >
+                        Move Pieces
+                      </button>
+                      <button
+                        type="button"
+                        className="ghost-button"
+                        onClick={resetFreePlayToStandard}
+                      >
+                        Reset Free Play
+                      </button>
+                      <button
+                        type="button"
+                        className="ghost-button"
+                        onClick={clearFreePlayBoard}
+                      >
+                        Clear Board
+                      </button>
+                    </div>
+                    <p className="hint">
+                      {isFreePlayPaletteArmed
+                        ? selectedPalettePiece === 'erase'
+                          ? 'Click any square to clear it, or switch back to Move Pieces.'
+                          : `Click any square to place ${PIECE_LABELS[
+                              selectedPalettePiece
+                            ].toLowerCase()}, or switch back to Move Pieces.`
+                        : 'Drag any piece anywhere, or click one piece and then another square. Dropping on an occupied square removes the piece already there.'}
+                    </p>
+                  </>
+                )}
               </>
             ) : (
               <div className="history-panel">
@@ -1594,7 +1874,7 @@ export default function App() {
           <article className="card">
             <div className="section-heading">
               <h2>Save &amp; Load</h2>
-              <p>Store game or setup snapshots on this device.</p>
+              <p>Store game, setup, or free-play snapshots on this device.</p>
             </div>
 
             <div className="save-form">
@@ -1602,14 +1882,14 @@ export default function App() {
                 type="text"
                 value={saveName}
                 onChange={(event) => setSaveName(event.target.value)}
-                placeholder={`Name this ${mode}`}
+                placeholder={`Name this ${activeModeLabel.toLowerCase()}`}
               />
               <button
                 type="button"
                 className="primary-button"
                 onClick={saveCurrentSnapshot}
               >
-                Save Current {mode === 'game' ? 'Game' : 'Setup'}
+                Save Current {activeModeLabel}
               </button>
             </div>
 
@@ -1622,7 +1902,7 @@ export default function App() {
                     <div>
                       <strong>{item.name}</strong>
                       <p>
-                        {item.type === 'game' ? 'Game snapshot' : 'Setup snapshot'}
+                        {(MODE_LABELS[item.type] ?? 'Game') + ' snapshot'}
                         {' · '}
                         {new Date(item.createdAt).toLocaleString()}
                       </p>

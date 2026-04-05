@@ -4,6 +4,7 @@ A React chess board with:
 
 - standard 2D board and pieces
 - legal move play
+- free play mode with unrestricted piece movement
 - board flip
 - undo and rewind to the start
 - setup/editor mode for custom positions
