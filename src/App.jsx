@@ -19,11 +19,9 @@ import {
   getPieceColor,
   getPromotionChoices,
   isLightSquare,
-  makeEditorStateFromFen,
   makeFreePlayStateFromFen,
   normalizeGameState,
   normalizeFreePlayState,
-  normalizeSetupState,
   parseFen,
   safeValidateFen,
   serializeGameSummary,
@@ -84,7 +82,6 @@ const PALETTE_PIECES = [
 
 const MODE_LABELS = {
   game: 'Game',
-  setup: 'Setup',
   freeplay: 'Free Play',
 };
 
@@ -111,7 +108,6 @@ function loadPersistedApp() {
     boardStyle: DEFAULT_BOARD_STYLE,
     pieceStyle: DEFAULT_PIECE_STYLE,
     gameState: createGameState(),
-    setupState: makeEditorStateFromFen(STANDARD_START_FEN),
     freePlayState: makeFreePlayStateFromFen(STANDARD_START_FEN),
   };
 
@@ -138,14 +134,15 @@ function loadPersistedApp() {
     return {
       mode:
         parsed.mode === 'setup' || parsed.mode === 'freeplay'
-          ? parsed.mode
+          ? 'freeplay'
           : 'game',
       orientation: parsed.orientation === 'b' ? 'b' : 'w',
       boardStyle: normalizeBoardStyle(parsed.boardStyle),
       pieceStyle,
       gameState: normalizeGameState(parsed.gameState),
-      setupState: normalizeSetupState(parsed.setupState),
-      freePlayState: normalizeFreePlayState(parsed.freePlayState),
+      freePlayState: normalizeFreePlayState(
+        parsed.freePlayState ?? parsed.setupState,
+      ),
     };
   } catch {
     return fallback;
@@ -165,16 +162,35 @@ function loadSavedItems() {
       return [];
     }
 
-    return parsed.filter(
-      (item) =>
-        item &&
-        typeof item === 'object' &&
-        typeof item.id === 'string' &&
-        typeof item.name === 'string' &&
-        (item.type === 'game' ||
-          item.type === 'setup' ||
-          item.type === 'freeplay'),
-    );
+    return parsed.flatMap((item) => {
+      if (
+        !item ||
+        typeof item !== 'object' ||
+        typeof item.id !== 'string' ||
+        typeof item.name !== 'string'
+      ) {
+        return [];
+      }
+
+      if (item.type === 'game' || item.type === 'freeplay') {
+        return [item];
+      }
+
+      if (item.type === 'setup') {
+        return [
+          {
+            ...item,
+            type: 'freeplay',
+            payload: {
+              freePlayState: normalizeFreePlayState(item.payload?.setupState),
+              orientation: item.payload?.orientation,
+            },
+          },
+        ];
+      }
+
+      return [];
+    });
   } catch {
     return [];
   }
@@ -262,7 +278,6 @@ export default function App() {
   const [isCustomizeOpen, setIsCustomizeOpen] = useState(false);
   const [customizeTab, setCustomizeTab] = useState('board');
   const [gameState, setGameState] = useState(persisted.gameState);
-  const [setupState, setSetupState] = useState(persisted.setupState);
   const [freePlayState, setFreePlayState] = useState(persisted.freePlayState);
   const [savedItems, setSavedItems] = useState(loadSavedItems);
   const [selectedSquare, setSelectedSquare] = useState(null);
@@ -278,10 +293,8 @@ export default function App() {
 
   const chess = buildChess(gameState);
   const gameBoard = parseFen(chess.fen());
-  const isSetupMode = mode === 'setup';
   const isFreePlayMode = mode === 'freeplay';
-  const boardState =
-    mode === 'game' ? gameBoard : isSetupMode ? setupState : freePlayState;
+  const boardState = mode === 'game' ? gameBoard : freePlayState;
   const boardRows = getBoardRows(orientation);
   const moveList = chess.history();
   const lastMove = getLastMove(gameState);
@@ -289,21 +302,21 @@ export default function App() {
   const materialBalance = getMaterialBalance(capturedPieces);
   const topCaptureColor = orientation === 'w' ? 'b' : 'w';
   const bottomCaptureColor = orientation === 'w' ? 'w' : 'b';
-  const activeTurnColor =
-    mode === 'game' ? chess.turn() : isSetupMode ? setupState.turn : null;
+  const activeTurnColor = mode === 'game' ? chess.turn() : freePlayState.turn;
   const legalTargets =
     mode === 'game' && selectedSquare
       ? getMoveChoices(chess, selectedSquare).map((move) => move.to)
       : [];
-  const setupFen = boardMapToFen(setupState.position, setupState.turn);
-  const setupValidation = safeValidateFen(setupFen);
   const freePlayFen = boardMapToFen(freePlayState.position, freePlayState.turn);
   const freePlayValidation = safeValidateFen(freePlayFen);
-  const activeTurnLabel = isFreePlayMode
-    ? 'Free play board'
-    : activeTurnColor === 'w'
-      ? 'White to move'
-      : 'Black to move';
+  const activeTurnLabel =
+    activeTurnColor === 'w'
+      ? isFreePlayMode
+        ? 'White to move if started as a game'
+        : 'White to move'
+      : isFreePlayMode
+        ? 'Black to move if started as a game'
+        : 'Black to move';
   const activePieceStyleLabel =
     PIECE_STYLE_OPTIONS.find((option) => option.value === pieceStyle)?.label ??
     'Wood + Ivory';
@@ -318,7 +331,7 @@ export default function App() {
   const onlineControlsLocked = isOnlineConnected || isOnlineBusy;
   const isOnlinePlayersTurn =
     !isOnlineConnected || onlineState.playerColor === activeTurnColor;
-  const canEditSetup = !onlineControlsLocked;
+  const canUseFreePlay = !onlineControlsLocked;
   const onlineStatusLabel = formatOnlineStatus(onlineState);
 
   useEffect(() => {
@@ -331,7 +344,6 @@ export default function App() {
         pieceStyle,
         displayPrefsVersion: DISPLAY_PREFS_VERSION,
         gameState,
-        setupState,
         freePlayState,
       }),
     );
@@ -342,7 +354,6 @@ export default function App() {
     mode,
     orientation,
     pieceStyle,
-    setupState,
   ]);
 
   useEffect(() => {
@@ -884,48 +895,20 @@ export default function App() {
   }
 
   function handlePaletteSelect(piece) {
-    if (isFreePlayMode) {
-      const nextArmed =
-        piece !== selectedPalettePiece || !isFreePlayPaletteArmed;
-
-      setSelectedPalettePiece(piece);
-      setSelectedSquare(null);
-      setIsFreePlayPaletteArmed(nextArmed);
-      setMessage(
-        nextArmed
-          ? piece === 'erase'
-            ? 'Free play placement tool armed. Click a square to clear it.'
-            : `Free play placement tool armed for ${PIECE_LABELS[
-                piece
-              ].toLowerCase()}.`
-          : 'Free play move mode armed.',
-      );
-      return;
-    }
+    const nextArmed =
+      piece !== selectedPalettePiece || !isFreePlayPaletteArmed;
 
     setSelectedPalettePiece(piece);
-  }
-
-  function handleSetupSquareClick(square) {
-    setSetupState((current) => {
-      const nextPosition = { ...current.position };
-
-      if (selectedPalettePiece === 'erase') {
-        delete nextPosition[square];
-      } else {
-        nextPosition[square] = selectedPalettePiece;
-      }
-
-      return {
-        ...current,
-        position: nextPosition,
-      };
-    });
-
+    setSelectedSquare(null);
+    setIsFreePlayPaletteArmed(nextArmed);
     setMessage(
-      selectedPalettePiece === 'erase'
-        ? `${square.toUpperCase()} cleared.`
-        : `${PIECE_LABELS[selectedPalettePiece]} placed on ${square.toUpperCase()}.`,
+      nextArmed
+        ? piece === 'erase'
+          ? 'Free play placement tool armed. Click a square to clear it.'
+          : `Free play placement tool armed for ${PIECE_LABELS[
+              piece
+            ].toLowerCase()}.`
+        : 'Free play move mode armed.',
     );
   }
 
@@ -1038,11 +1021,6 @@ export default function App() {
   function handleSquareClick(square) {
     if (mode === 'game') {
       handleGameSquareClick(square);
-      return;
-    }
-
-    if (isSetupMode) {
-      handleSetupSquareClick(square);
       return;
     }
 
@@ -1179,94 +1157,26 @@ export default function App() {
     setMessage('Standard game ready.');
   }
 
-  function copyCurrentBoardToSetup() {
-    if (onlineControlsLocked) {
-      setMessage('Setup mode stays local-only. Leave the room first.');
-      return;
-    }
-
-    if (isSetupMode) {
-      return;
-    }
-
-    if (mode === 'game') {
-      setSetupState(makeEditorStateFromFen(chess.fen()));
-      setMode('setup');
-      setSelectedSquare(null);
-      setPendingPromotion(null);
-      setMessage('Current game copied into setup mode.');
-      return;
-    }
-
-    setSetupState({
-      position: { ...freePlayState.position },
-      turn: freePlayState.turn,
-    });
-    setMode('setup');
-    setSelectedSquare(null);
-    setPendingPromotion(null);
-    setMessage(
-      `Free play board copied into setup mode with ${
-        freePlayState.turn === 'w' ? 'White' : 'Black'
-      } to move.`,
-    );
-  }
-
-  function startGameFromSetup() {
-    if (onlineControlsLocked) {
-      setMessage('Setup mode stays local-only. Leave the room first.');
-      return;
-    }
-
-    if (!setupValidation.valid) {
-      setMessage(setupValidation.message);
-      return;
-    }
-
-    setGameState({
-      startFen: setupFen,
-      moves: [],
-    });
-    setMode('game');
-    setSelectedSquare(null);
-    setPendingPromotion(null);
-    setMessage('Game started from the setup position.');
-  }
-
-  function startGameFromFreePlay() {
+  function copyCurrentBoardToFreePlay() {
     if (onlineControlsLocked) {
       setMessage('Free play stays local-only. Leave the room first.');
       return;
     }
 
-    if (!freePlayValidation.valid) {
-      setMessage(freePlayValidation.message);
+    if (isFreePlayMode) {
       return;
     }
 
-    setGameState({
-      startFen: freePlayFen,
-      moves: [],
+    setFreePlayState({
+      ...makeFreePlayStateFromFen(chess.fen()),
+      history: [],
     });
-    setMode('game');
+    setMode('freeplay');
     setSelectedSquare(null);
     setPendingPromotion(null);
     setDragSquare(null);
     setIsFreePlayPaletteArmed(false);
-    setMessage('Game started from the free play position.');
-  }
-
-  function resetSetupToStandard() {
-    setSetupState(makeEditorStateFromFen(STANDARD_START_FEN));
-    setMessage('Setup reset to the standard chess position.');
-  }
-
-  function clearSetupBoard() {
-    setSetupState({
-      position: {},
-      turn: 'w',
-    });
-    setMessage('Setup board cleared.');
+    setMessage('Current game copied into free play.');
   }
 
   function resetFreePlayToStandard() {
@@ -1296,6 +1206,29 @@ export default function App() {
     );
   }
 
+  function startGameFromFreePlay() {
+    if (onlineControlsLocked) {
+      setMessage('Free play stays local-only. Leave the room first.');
+      return;
+    }
+
+    if (!freePlayValidation.valid) {
+      setMessage(freePlayValidation.message);
+      return;
+    }
+
+    setGameState({
+      startFen: freePlayFen,
+      moves: [],
+    });
+    setMode('game');
+    setSelectedSquare(null);
+    setPendingPromotion(null);
+    setDragSquare(null);
+    setIsFreePlayPaletteArmed(false);
+    setMessage('Game started from the free play position.');
+  }
+
   function saveCurrentSnapshot() {
     const name =
       saveName.trim() || `${activeModeLabel} ${new Date().toLocaleString()}`;
@@ -1311,15 +1244,10 @@ export default function App() {
               gameState,
               orientation,
             }
-          : isSetupMode
-            ? {
-                setupState,
-                orientation,
-              }
-            : {
-                freePlayState,
-                orientation,
-              },
+          : {
+              freePlayState,
+              orientation,
+            },
     };
 
     setSavedItems((current) => [nextSave, ...current]);
@@ -1336,11 +1264,10 @@ export default function App() {
     if (item.type === 'game') {
       setGameState(normalizeGameState(item.payload?.gameState));
       setMode('game');
-    } else if (item.type === 'setup') {
-      setSetupState(normalizeSetupState(item.payload?.setupState));
-      setMode('setup');
     } else {
-      setFreePlayState(normalizeFreePlayState(item.payload?.freePlayState));
+      setFreePlayState(
+        normalizeFreePlayState(item.payload?.freePlayState ?? item.payload?.setupState),
+      );
       setMode('freeplay');
     }
 
@@ -1474,7 +1401,7 @@ export default function App() {
               className="ghost-button"
               type="button"
               onClick={handleUndo}
-              disabled={onlineControlsLocked || isSetupMode}
+              disabled={onlineControlsLocked}
             >
               Undo
             </button>
@@ -1489,10 +1416,10 @@ export default function App() {
             <button
               className="ghost-button"
               type="button"
-              onClick={copyCurrentBoardToSetup}
-              disabled={onlineControlsLocked || isSetupMode}
+              onClick={copyCurrentBoardToFreePlay}
+              disabled={onlineControlsLocked || isFreePlayMode}
             >
-              Copy Board To Setup
+              Copy Board To Free Play
             </button>
             <button
               className="ghost-button"
@@ -1699,7 +1626,7 @@ export default function App() {
           <article className="card">
             <div className="section-heading">
               <h2>Mode</h2>
-              <p>Switch between legal play, setup editing, and unrestricted free play.</p>
+              <p>Switch between legal play and unrestricted free play.</p>
             </div>
             <div className="mode-switch">
               <button
@@ -1711,32 +1638,23 @@ export default function App() {
               </button>
               <button
                 type="button"
-                className={mode === 'setup' ? 'primary-button' : 'ghost-button'}
-                onClick={() => setMode('setup')}
-                disabled={!canEditSetup}
-              >
-                Setup
-              </button>
-              <button
-                type="button"
                 className={mode === 'freeplay' ? 'primary-button' : 'ghost-button'}
                 onClick={() => setMode('freeplay')}
-                disabled={!canEditSetup}
+                disabled={!canUseFreePlay}
               >
                 Free Play
               </button>
             </div>
 
-            {isSetupMode || isFreePlayMode ? (
+            {isFreePlayMode ? (
               <>
-                <div className="setup-palette">
+                <div className="editor-palette">
                   {PALETTE_PIECES.map((piece) => (
                     <button
                       key={piece}
                       type="button"
                       className={
-                        selectedPalettePiece === piece &&
-                        (isSetupMode || isFreePlayPaletteArmed)
+                        selectedPalettePiece === piece && isFreePlayPaletteArmed
                           ? 'palette-button active'
                           : 'palette-button'
                       }
@@ -1758,113 +1676,66 @@ export default function App() {
                   ))}
                 </div>
 
-                {isSetupMode ? (
-                  <>
-                    <div className="setup-controls">
-                      <button
-                        type="button"
-                        className="ghost-button"
-                        onClick={() =>
-                          setSetupState((current) => ({
-                            ...current,
-                            turn: current.turn === 'w' ? 'b' : 'w',
-                          }))
-                        }
-                      >
-                        Side To Move: {setupState.turn === 'w' ? 'White' : 'Black'}
-                      </button>
-                      <button
-                        type="button"
-                        className="ghost-button"
-                        onClick={resetSetupToStandard}
-                      >
-                        Reset Setup
-                      </button>
-                      <button
-                        type="button"
-                        className="ghost-button"
-                        onClick={clearSetupBoard}
-                      >
-                        Clear Board
-                      </button>
-                      <button
-                        type="button"
-                        className="primary-button"
-                        onClick={startGameFromSetup}
-                      >
-                        Start Game From Setup
-                      </button>
-                    </div>
-                    <p className={setupValidation.valid ? 'hint ok' : 'hint warning'}>
-                      {setupValidation.message}
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <div className="setup-controls">
-                      <button
-                        type="button"
-                        className={
-                          isFreePlayPaletteArmed ? 'ghost-button' : 'primary-button'
-                        }
-                        onClick={() => {
-                          setIsFreePlayPaletteArmed(false);
-                          setMessage(
-                            'Free play move mode armed. Drag a piece anywhere or click one and choose a square.',
-                          );
-                        }}
-                      >
-                        Move Pieces
-                      </button>
-                      <button
-                        type="button"
-                        className="ghost-button"
-                        onClick={toggleFreePlayTurn}
-                      >
-                        Side To Move: {freePlayState.turn === 'w' ? 'White' : 'Black'}
-                      </button>
-                      <button
-                        type="button"
-                        className="ghost-button"
-                        onClick={resetFreePlayToStandard}
-                      >
-                        Reset Free Play
-                      </button>
-                      <button
-                        type="button"
-                        className="ghost-button"
-                        onClick={clearFreePlayBoard}
-                      >
-                        Clear Board
-                      </button>
-                      <button
-                        type="button"
-                        className="primary-button"
-                        onClick={startGameFromFreePlay}
-                      >
-                        Start Game From Free Play
-                      </button>
-                    </div>
-                    <p className="hint">
-                      {isFreePlayPaletteArmed
-                        ? selectedPalettePiece === 'erase'
-                          ? 'Click any square to clear it, or switch back to Move Pieces.'
-                          : `Click any square to place ${PIECE_LABELS[
-                              selectedPalettePiece
-                            ].toLowerCase()}, or switch back to Move Pieces.`
-                        : `Drag any piece anywhere, or click one piece and then another square. Dropping on an occupied square removes the piece already there. The last ${FREE_PLAY_UNDO_LIMIT} free-play actions can be undone.`}
-                    </p>
-                    <p
-                      className={freePlayValidation.valid ? 'hint ok' : 'hint warning'}
-                    >
-                      {freePlayValidation.valid
-                        ? `Position is ready for game mode with ${
-                            freePlayState.turn === 'w' ? 'White' : 'Black'
-                          } to move.`
-                        : freePlayValidation.message}
-                    </p>
-                  </>
-                )}
+                <div className="editor-controls">
+                  <button
+                    type="button"
+                    className={
+                      isFreePlayPaletteArmed ? 'ghost-button' : 'primary-button'
+                    }
+                    onClick={() => {
+                      setIsFreePlayPaletteArmed(false);
+                      setMessage(
+                        'Free play move mode armed. Drag a piece anywhere or click one and choose a square.',
+                      );
+                    }}
+                  >
+                    Move Pieces
+                  </button>
+                  <button
+                    type="button"
+                    className="ghost-button"
+                    onClick={toggleFreePlayTurn}
+                  >
+                    Side To Move: {freePlayState.turn === 'w' ? 'White' : 'Black'}
+                  </button>
+                  <button
+                    type="button"
+                    className="ghost-button"
+                    onClick={resetFreePlayToStandard}
+                  >
+                    Reset Free Play
+                  </button>
+                  <button
+                    type="button"
+                    className="ghost-button"
+                    onClick={clearFreePlayBoard}
+                  >
+                    Clear Board
+                  </button>
+                  <button
+                    type="button"
+                    className="primary-button"
+                    onClick={startGameFromFreePlay}
+                  >
+                    Start Game From Free Play
+                  </button>
+                </div>
+                <p className="hint">
+                  {isFreePlayPaletteArmed
+                    ? selectedPalettePiece === 'erase'
+                      ? 'Click any square to clear it, or switch back to Move Pieces.'
+                      : `Click any square to place ${PIECE_LABELS[
+                          selectedPalettePiece
+                        ].toLowerCase()}, or switch back to Move Pieces.`
+                    : `Drag any piece anywhere, or click one piece and then another square. Dropping on an occupied square removes the piece already there. The last ${FREE_PLAY_UNDO_LIMIT} free-play actions can be undone.`}
+                </p>
+                <p className={freePlayValidation.valid ? 'hint ok' : 'hint warning'}>
+                  {freePlayValidation.valid
+                    ? `Position is ready for game mode with ${
+                        freePlayState.turn === 'w' ? 'White' : 'Black'
+                      } to move.`
+                    : freePlayValidation.message}
+                </p>
               </>
             ) : (
               <div className="history-panel">
@@ -1992,7 +1863,7 @@ export default function App() {
           <article className="card">
             <div className="section-heading">
               <h2>Save &amp; Load</h2>
-              <p>Store game, setup, or free-play snapshots on this device.</p>
+              <p>Store game or free-play snapshots on this device.</p>
             </div>
 
             <div className="save-form">

@@ -267,14 +267,6 @@ export function safeValidateFen(fen) {
   }
 }
 
-export function makeEditorStateFromFen(fen) {
-  const { position, turn } = parseFen(fen);
-  return {
-    position,
-    turn,
-  };
-}
-
 export function makeFreePlayStateFromFen(fen) {
   const { position, turn } = parseFen(fen);
   return {
@@ -296,17 +288,6 @@ function normalizeBoardPosition(candidatePosition) {
   }
 
   return nextPosition;
-}
-
-export function normalizeSetupState(candidate) {
-  if (!candidate || typeof candidate !== 'object') {
-    return makeEditorStateFromFen(STANDARD_START_FEN);
-  }
-
-  return {
-    position: normalizeBoardPosition(candidate.position),
-    turn: candidate.turn === 'b' ? 'b' : 'w',
-  };
 }
 
 export function normalizeFreePlayState(candidate) {

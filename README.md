@@ -4,10 +4,9 @@ A React chess board with:
 
 - standard 2D board and pieces
 - legal move play
-- free play mode with unrestricted piece movement
+- free play mode for arbitrary positions and unrestricted piece movement
 - board flip
 - undo and rewind to the start
-- setup/editor mode for custom positions
 - local save/load in the browser
 - selectable board and piece styles
 - optional Supabase-backed online rooms for live two-player play
@@ -52,7 +51,7 @@ What the online mode does:
 - the host seat defaults to the current board orientation, but can be overridden
 - `Join Room` claims whichever side is still open
 - moves are synced live through Supabase Realtime
-- setup mode, undo, rewind, and local save loading stay local-only while a room is connected
+- free play, undo, rewind, and local save loading stay local-only while a room is connected
 
 If you already ran an older version of the SQL setup, run [supabase/schema.sql](/Volumes/T7/kritika4/Documents/Coding/Chess/supabase/schema.sql) again so the table allows the host to start as either White or Black.
 

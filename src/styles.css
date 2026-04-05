@@ -132,7 +132,7 @@ input:disabled {
 .save-item,
 .save-actions,
 .mode-switch,
-.setup-controls {
+.editor-controls {
   display: flex;
   gap: 0.75rem;
 }
@@ -993,7 +993,7 @@ input:disabled {
   font-size: 0.82rem;
 }
 
-.setup-palette {
+.editor-palette {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 0.75rem;
@@ -1042,7 +1042,7 @@ input:disabled {
   font-weight: 600;
 }
 
-.setup-controls {
+.editor-controls {
   flex-wrap: wrap;
   margin-top: 1rem;
 }
