@@ -56,6 +56,7 @@ import { HAS_SUPABASE_CONFIG, supabase } from './lib/supabase.js';
 const APP_STORAGE_KEY = 'chess-board-session-v1';
 const SAVES_STORAGE_KEY = 'chess-board-saves-v1';
 const DISPLAY_PREFS_VERSION = 3;
+const FREE_PLAY_UNDO_LIMIT = 200;
 
 function createDefaultAuthState() {
   return {
@@ -86,6 +87,17 @@ const MODE_LABELS = {
   setup: 'Setup',
   freeplay: 'Free Play',
 };
+
+function areBoardPositionsEqual(left = {}, right = {}) {
+  const leftKeys = Object.keys(left);
+  const rightKeys = Object.keys(right);
+
+  if (leftKeys.length !== rightKeys.length) {
+    return false;
+  }
+
+  return leftKeys.every((key) => left[key] === right[key]);
+}
 
 function loadPersistedApp() {
   const fallback = {
@@ -910,20 +922,32 @@ export default function App() {
     );
   }
 
-  function placeFreePlayPiece(square) {
+  function updateFreePlayPosition(nextPosition) {
     setFreePlayState((current) => {
-      const nextPosition = { ...current.position };
-
-      if (selectedPalettePiece === 'erase') {
-        delete nextPosition[square];
-      } else {
-        nextPosition[square] = selectedPalettePiece;
+      if (areBoardPositionsEqual(current.position, nextPosition)) {
+        return current;
       }
 
       return {
         position: nextPosition,
+        history: [
+          ...current.history.slice(-(FREE_PLAY_UNDO_LIMIT - 1)),
+          current.position,
+        ],
       };
     });
+  }
+
+  function placeFreePlayPiece(square) {
+    const nextPosition = { ...freePlayState.position };
+
+    if (selectedPalettePiece === 'erase') {
+      delete nextPosition[square];
+    } else {
+      nextPosition[square] = selectedPalettePiece;
+    }
+
+    updateFreePlayPosition(nextPosition);
 
     setSelectedSquare(null);
     setMessage(
@@ -950,21 +974,10 @@ export default function App() {
       return;
     }
 
-    setFreePlayState((current) => {
-      const piece = current.position[from];
-
-      if (!piece) {
-        return current;
-      }
-
-      const nextPosition = { ...current.position };
-      delete nextPosition[from];
-      nextPosition[to] = piece;
-
-      return {
-        position: nextPosition,
-      };
-    });
+    const nextPosition = { ...freePlayState.position };
+    delete nextPosition[from];
+    nextPosition[to] = movingPiece;
+    updateFreePlayPosition(nextPosition);
 
     setMessage(
       replacedPiece
@@ -1070,6 +1083,23 @@ export default function App() {
   function handleUndo() {
     if (onlineControlsLocked) {
       setMessage('Undo stays local-only. Leave the room first.');
+      return;
+    }
+
+    if (isFreePlayMode) {
+      if (freePlayState.history.length === 0) {
+        setMessage('No free play actions to undo.');
+        return;
+      }
+
+      setFreePlayState((current) => ({
+        position: current.history.at(-1) ?? current.position,
+        history: current.history.slice(0, -1),
+      }));
+      setSelectedSquare(null);
+      setDragSquare(null);
+      setIsFreePlayPaletteArmed(false);
+      setMessage('Free play action reverted.');
       return;
     }
 
@@ -1184,7 +1214,7 @@ export default function App() {
   }
 
   function resetFreePlayToStandard() {
-    setFreePlayState(makeFreePlayStateFromFen(STANDARD_START_FEN));
+    updateFreePlayPosition(makeFreePlayStateFromFen(STANDARD_START_FEN).position);
     setSelectedSquare(null);
     setDragSquare(null);
     setIsFreePlayPaletteArmed(false);
@@ -1192,9 +1222,7 @@ export default function App() {
   }
 
   function clearFreePlayBoard() {
-    setFreePlayState({
-      position: {},
-    });
+    updateFreePlayPosition({});
     setSelectedSquare(null);
     setDragSquare(null);
     setIsFreePlayPaletteArmed(false);
@@ -1379,9 +1407,9 @@ export default function App() {
               className="ghost-button"
               type="button"
               onClick={handleUndo}
-              disabled={onlineControlsLocked || mode !== 'game'}
+              disabled={onlineControlsLocked || isSetupMode}
             >
-              Undo Move
+              Undo
             </button>
             <button
               className="ghost-button"
@@ -1743,7 +1771,7 @@ export default function App() {
                           : `Click any square to place ${PIECE_LABELS[
                               selectedPalettePiece
                             ].toLowerCase()}, or switch back to Move Pieces.`
-                        : 'Drag any piece anywhere, or click one piece and then another square. Dropping on an occupied square removes the piece already there.'}
+                        : `Drag any piece anywhere, or click one piece and then another square. Dropping on an occupied square removes the piece already there. The last ${FREE_PLAY_UNDO_LIMIT} free-play actions can be undone.`}
                     </p>
                   </>
                 )}
