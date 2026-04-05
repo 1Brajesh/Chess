@@ -99,6 +99,11 @@ function areBoardPositionsEqual(left = {}, right = {}) {
   return leftKeys.every((key) => left[key] === right[key]);
 }
 
+function areFreePlaySnapshotsEqual(left, right) {
+  return left?.turn === right?.turn &&
+    areBoardPositionsEqual(left?.position, right?.position);
+}
+
 function loadPersistedApp() {
   const fallback = {
     mode: 'game',
@@ -292,6 +297,8 @@ export default function App() {
       : [];
   const setupFen = boardMapToFen(setupState.position, setupState.turn);
   const setupValidation = safeValidateFen(setupFen);
+  const freePlayFen = boardMapToFen(freePlayState.position, freePlayState.turn);
+  const freePlayValidation = safeValidateFen(freePlayFen);
   const activeTurnLabel = isFreePlayMode
     ? 'Free play board'
     : activeTurnColor === 'w'
@@ -922,17 +929,30 @@ export default function App() {
     );
   }
 
-  function updateFreePlayPosition(nextPosition) {
+  function updateFreePlayState(nextPosition, nextTurn = freePlayState.turn) {
     setFreePlayState((current) => {
-      if (areBoardPositionsEqual(current.position, nextPosition)) {
+      const nextSnapshot = {
+        position: nextPosition,
+        turn: nextTurn,
+      };
+      const currentSnapshot = {
+        position: current.position,
+        turn: current.turn,
+      };
+
+      if (areFreePlaySnapshotsEqual(currentSnapshot, nextSnapshot)) {
         return current;
       }
 
       return {
         position: nextPosition,
+        turn: nextTurn,
         history: [
           ...current.history.slice(-(FREE_PLAY_UNDO_LIMIT - 1)),
-          current.position,
+          {
+            position: current.position,
+            turn: current.turn,
+          },
         ],
       };
     });
@@ -947,7 +967,7 @@ export default function App() {
       nextPosition[square] = selectedPalettePiece;
     }
 
-    updateFreePlayPosition(nextPosition);
+    updateFreePlayState(nextPosition);
 
     setSelectedSquare(null);
     setMessage(
@@ -977,7 +997,7 @@ export default function App() {
     const nextPosition = { ...freePlayState.position };
     delete nextPosition[from];
     nextPosition[to] = movingPiece;
-    updateFreePlayPosition(nextPosition);
+    updateFreePlayState(nextPosition);
 
     setMessage(
       replacedPiece
@@ -1092,10 +1112,19 @@ export default function App() {
         return;
       }
 
-      setFreePlayState((current) => ({
-        position: current.history.at(-1) ?? current.position,
-        history: current.history.slice(0, -1),
-      }));
+      setFreePlayState((current) => {
+        const previousSnapshot = current.history.at(-1);
+
+        if (!previousSnapshot) {
+          return current;
+        }
+
+        return {
+          position: previousSnapshot.position,
+          turn: previousSnapshot.turn,
+          history: current.history.slice(0, -1),
+        };
+      });
       setSelectedSquare(null);
       setDragSquare(null);
       setIsFreePlayPaletteArmed(false);
@@ -1171,12 +1200,16 @@ export default function App() {
 
     setSetupState({
       position: { ...freePlayState.position },
-      turn: 'w',
+      turn: freePlayState.turn,
     });
     setMode('setup');
     setSelectedSquare(null);
     setPendingPromotion(null);
-    setMessage('Free play board copied into setup mode with White to move.');
+    setMessage(
+      `Free play board copied into setup mode with ${
+        freePlayState.turn === 'w' ? 'White' : 'Black'
+      } to move.`,
+    );
   }
 
   function startGameFromSetup() {
@@ -1200,6 +1233,29 @@ export default function App() {
     setMessage('Game started from the setup position.');
   }
 
+  function startGameFromFreePlay() {
+    if (onlineControlsLocked) {
+      setMessage('Free play stays local-only. Leave the room first.');
+      return;
+    }
+
+    if (!freePlayValidation.valid) {
+      setMessage(freePlayValidation.message);
+      return;
+    }
+
+    setGameState({
+      startFen: freePlayFen,
+      moves: [],
+    });
+    setMode('game');
+    setSelectedSquare(null);
+    setPendingPromotion(null);
+    setDragSquare(null);
+    setIsFreePlayPaletteArmed(false);
+    setMessage('Game started from the free play position.');
+  }
+
   function resetSetupToStandard() {
     setSetupState(makeEditorStateFromFen(STANDARD_START_FEN));
     setMessage('Setup reset to the standard chess position.');
@@ -1214,7 +1270,8 @@ export default function App() {
   }
 
   function resetFreePlayToStandard() {
-    updateFreePlayPosition(makeFreePlayStateFromFen(STANDARD_START_FEN).position);
+    const resetState = makeFreePlayStateFromFen(STANDARD_START_FEN);
+    updateFreePlayState(resetState.position, resetState.turn);
     setSelectedSquare(null);
     setDragSquare(null);
     setIsFreePlayPaletteArmed(false);
@@ -1222,11 +1279,21 @@ export default function App() {
   }
 
   function clearFreePlayBoard() {
-    updateFreePlayPosition({});
+    updateFreePlayState({}, 'w');
     setSelectedSquare(null);
     setDragSquare(null);
     setIsFreePlayPaletteArmed(false);
     setMessage('Free play board cleared.');
+  }
+
+  function toggleFreePlayTurn() {
+    const nextTurn = freePlayState.turn === 'w' ? 'b' : 'w';
+    updateFreePlayState(freePlayState.position, nextTurn);
+    setMessage(
+      `Game from free play will start with ${
+        nextTurn === 'w' ? 'White' : 'Black'
+      } to move.`,
+    );
   }
 
   function saveCurrentSnapshot() {
@@ -1752,6 +1819,13 @@ export default function App() {
                       <button
                         type="button"
                         className="ghost-button"
+                        onClick={toggleFreePlayTurn}
+                      >
+                        Side To Move: {freePlayState.turn === 'w' ? 'White' : 'Black'}
+                      </button>
+                      <button
+                        type="button"
+                        className="ghost-button"
                         onClick={resetFreePlayToStandard}
                       >
                         Reset Free Play
@@ -1763,6 +1837,13 @@ export default function App() {
                       >
                         Clear Board
                       </button>
+                      <button
+                        type="button"
+                        className="primary-button"
+                        onClick={startGameFromFreePlay}
+                      >
+                        Start Game From Free Play
+                      </button>
                     </div>
                     <p className="hint">
                       {isFreePlayPaletteArmed
@@ -1772,6 +1853,15 @@ export default function App() {
                               selectedPalettePiece
                             ].toLowerCase()}, or switch back to Move Pieces.`
                         : `Drag any piece anywhere, or click one piece and then another square. Dropping on an occupied square removes the piece already there. The last ${FREE_PLAY_UNDO_LIMIT} free-play actions can be undone.`}
+                    </p>
+                    <p
+                      className={freePlayValidation.valid ? 'hint ok' : 'hint warning'}
+                    >
+                      {freePlayValidation.valid
+                        ? `Position is ready for game mode with ${
+                            freePlayState.turn === 'w' ? 'White' : 'Black'
+                          } to move.`
+                        : freePlayValidation.message}
                     </p>
                   </>
                 )}

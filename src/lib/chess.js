@@ -276,9 +276,10 @@ export function makeEditorStateFromFen(fen) {
 }
 
 export function makeFreePlayStateFromFen(fen) {
-  const { position } = parseFen(fen);
+  const { position, turn } = parseFen(fen);
   return {
     position,
+    turn,
     history: [],
   };
 }
@@ -316,11 +317,15 @@ export function normalizeFreePlayState(candidate) {
   const nextHistory = Array.isArray(candidate.history)
     ? candidate.history
         .filter((entry) => entry && typeof entry === 'object')
-        .map((entry) => normalizeBoardPosition(entry))
+        .map((entry) => ({
+          position: normalizeBoardPosition(entry.position ?? entry),
+          turn: entry.turn === 'b' ? 'b' : 'w',
+        }))
     : [];
 
   return {
     position: normalizeBoardPosition(candidate.position),
+    turn: candidate.turn === 'b' ? 'b' : 'w',
     history: nextHistory,
   };
 }
