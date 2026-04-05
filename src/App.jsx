@@ -12,13 +12,11 @@ import {
   buildChess,
   createGameState,
   getBoardRows,
-  getCapturedPieces,
-  getLastMove,
+  getCapturedPiecesFromHistory,
   getMaterialBalance,
   getMoveChoices,
   getPieceColor,
   getPromotionChoices,
-  isLightSquare,
   makeFreePlayStateFromFen,
   normalizeGameState,
   normalizeFreePlayState,
@@ -26,7 +24,11 @@ import {
   safeValidateFen,
   serializeGameSummary,
 } from './lib/chess.js';
-import ChessPiece from './components/ChessPiece.jsx';
+import BoardPanel from './components/BoardPanel.jsx';
+import CustomizeCard from './components/CustomizeCard.jsx';
+import ModeCard from './components/ModeCard.jsx';
+import OnlinePlayCard from './components/OnlinePlayCard.jsx';
+import SaveLoadCard from './components/SaveLoadCard.jsx';
 import {
   BOARD_STYLE_OPTIONS,
   DEFAULT_BOARD_STYLE,
@@ -204,67 +206,6 @@ function createSaveId() {
   return `save-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
-function CapturedTray({
-  lossColor,
-  pieces,
-  lead,
-  pieceStyle,
-  animatedCapture,
-}) {
-  const label = lossColor === 'w' ? 'White captured' : 'Black captured';
-
-  return (
-    <div className="captured-tray" aria-label={`${label} pieces`}>
-      <div className="captured-piece-list">
-        {pieces.length === 0 ? (
-          <span className="captured-empty">No captures</span>
-        ) : (
-          pieces.map((piece, index) => (
-            <span
-              key={`${piece}-${index}`}
-              className={[
-                'captured-piece-item',
-                animatedCapture?.color === lossColor &&
-                animatedCapture?.piece === piece &&
-                animatedCapture?.index === index
-                  ? 'capture-pop'
-                  : '',
-              ]
-                .filter(Boolean)
-                .join(' ')}
-            >
-              <ChessPiece
-                piece={piece}
-                pieceStyle={pieceStyle}
-                className="captured-piece"
-              />
-            </span>
-          ))
-        )}
-      </div>
-      {lead > 0 ? <span className="captured-score">+{lead}</span> : null}
-    </div>
-  );
-}
-
-function TurnMarker({ active, title, position }) {
-  return (
-    <div
-      className={[
-        'turn-marker-slot',
-        position,
-        active ? 'active' : '',
-      ]
-        .filter(Boolean)
-        .join(' ')}
-    >
-      {active ? (
-        <div className="turn-marker" title={title} aria-label={title} />
-      ) : null}
-    </div>
-  );
-}
-
 export default function App() {
   const [persisted] = useState(loadPersistedApp);
   const [mode, setMode] = useState(persisted.mode);
@@ -293,12 +234,13 @@ export default function App() {
 
   const chess = buildChess(gameState);
   const gameBoard = parseFen(chess.fen());
+  const verboseMoveHistory = chess.history({ verbose: true });
   const isFreePlayMode = mode === 'freeplay';
   const boardState = mode === 'game' ? gameBoard : freePlayState;
   const boardRows = getBoardRows(orientation);
-  const moveList = chess.history();
-  const lastMove = getLastMove(gameState);
-  const capturedPieces = getCapturedPieces(gameState);
+  const moveList = verboseMoveHistory.map((move) => move.san);
+  const lastMove = verboseMoveHistory.at(-1) ?? null;
+  const capturedPieces = getCapturedPiecesFromHistory(verboseMoveHistory);
   const materialBalance = getMaterialBalance(capturedPieces);
   const topCaptureColor = orientation === 'w' ? 'b' : 'w';
   const bottomCaptureColor = orientation === 'w' ? 'w' : 'b';
@@ -1206,6 +1148,13 @@ export default function App() {
     );
   }
 
+  function armFreePlayMoveMode() {
+    setIsFreePlayPaletteArmed(false);
+    setMessage(
+      'Free play move mode armed. Drag a piece anywhere or click one and choose a square.',
+    );
+  }
+
   function startGameFromFreePlay() {
     if (onlineControlsLocked) {
       setMessage('Free play stays local-only. Leave the room first.');
@@ -1282,6 +1231,10 @@ export default function App() {
     setMessage('Saved snapshot removed.');
   }
 
+  function handleRoomCodeInputChange(value) {
+    setRoomCodeInput(normalizeRoomCode(value));
+  }
+
   return (
     <div className="app-shell">
       <header className="hero">
@@ -1289,635 +1242,109 @@ export default function App() {
       </header>
 
       <main className="layout">
-        <section className="board-panel card">
-          <div className="board-stage">
-            <div className="board-stack">
-              {mode === 'game' ? (
-                <CapturedTray
-                  lossColor={topCaptureColor}
-                  pieces={capturedPieces[topCaptureColor]}
-                  lead={materialBalance[topCaptureColor]}
-                  pieceStyle={pieceStyle}
-                  animatedCapture={captureAnimation}
-                />
-              ) : null}
-
-              <div className="board-core">
-                <aside className="turn-marker-column" aria-label={activeTurnLabel}>
-                  <TurnMarker
-                    active={activeTurnColor === topCaptureColor}
-                    title={activeTurnLabel}
-                    position="top"
-                  />
-                  <TurnMarker
-                    active={activeTurnColor === bottomCaptureColor}
-                    title={activeTurnLabel}
-                    position="bottom"
-                  />
-                </aside>
-
-                <div className={['board-frame', `board-style-${boardStyle}`].join(' ')}>
-                  <div className="board-grid" role="grid" aria-label="Chess board">
-                    {boardRows.map((row, rowIndex) =>
-                      row.map((square, columnIndex) => {
-                        const piece = boardState.position[square];
-                        const isSelected = selectedSquare === square;
-                        const isTarget = legalTargets.includes(square);
-                        const isLastMoveSquare =
-                          mode === 'game' &&
-                          lastMove &&
-                          (lastMove.from === square || lastMove.to === square);
-                        const rankLabel = columnIndex === 0 ? square[1] : '';
-                        const fileLabel =
-                          rowIndex === boardRows.length - 1 ? square[0] : '';
-
-                        return (
-                          <button
-                            key={square}
-                            type="button"
-                            className={[
-                              'board-square',
-                              isLightSquare(square) ? 'light' : 'dark',
-                              isSelected ? 'selected' : '',
-                              isTarget ? 'target' : '',
-                              isLastMoveSquare ? 'last-move' : '',
-                            ]
-                              .filter(Boolean)
-                              .join(' ')}
-                            onClick={() => handleSquareClick(square)}
-                            onDragOver={(event) => event.preventDefault()}
-                            onDrop={() => handleDrop(square)}
-                            draggable={
-                              (mode === 'game' || mode === 'freeplay') &&
-                              Boolean(piece)
-                            }
-                            onDragStart={() => handleDragStart(square)}
-                            onDragEnd={() => {
-                              setDragSquare(null);
-                            }}
-                            aria-label={`${square} ${
-                              piece ? PIECE_LABELS[piece] : 'empty square'
-                            }`}
-                          >
-                            {rankLabel ? (
-                              <span className="square-rank">{rankLabel}</span>
-                            ) : null}
-                            {fileLabel ? (
-                              <span className="square-file">{fileLabel}</span>
-                            ) : null}
-                            {piece ? (
-                              <ChessPiece piece={piece} pieceStyle={pieceStyle} />
-                            ) : null}
-                          </button>
-                        );
-                      }),
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {mode === 'game' ? (
-                <CapturedTray
-                  lossColor={bottomCaptureColor}
-                  pieces={capturedPieces[bottomCaptureColor]}
-                  lead={materialBalance[bottomCaptureColor]}
-                  pieceStyle={pieceStyle}
-                  animatedCapture={captureAnimation}
-                />
-              ) : null}
-            </div>
-          </div>
-
-          <div className="board-actions">
-            <button
-              className="primary-button"
-              type="button"
-              onClick={startNewGame}
-              disabled={onlineControlsLocked}
-            >
-              New Standard Game
-            </button>
-            <button
-              className="ghost-button"
-              type="button"
-              onClick={handleUndo}
-              disabled={onlineControlsLocked}
-            >
-              Undo
-            </button>
-            <button
-              className="ghost-button"
-              type="button"
-              onClick={rewindToStart}
-              disabled={onlineControlsLocked || mode !== 'game'}
-            >
-              Rewind To Start
-            </button>
-            <button
-              className="ghost-button"
-              type="button"
-              onClick={copyCurrentBoardToFreePlay}
-              disabled={onlineControlsLocked || isFreePlayMode}
-            >
-              Copy Board To Free Play
-            </button>
-            <button
-              className="ghost-button"
-              type="button"
-              onClick={() =>
-                setOrientation((current) => (current === 'w' ? 'b' : 'w'))
-              }
-            >
-              Flip Board
-            </button>
-          </div>
-
-          {pendingPromotion ? (
-            <div className="promotion-modal">
-              <div className="promotion-card">
-                <h3>Choose a promotion piece</h3>
-                <div className="promotion-options">
-                  {pendingPromotion.choices.map((choice) => {
-                    const pieceCode = `${chess.turn()}${choice.toUpperCase()}`;
-                    return (
-                      <button
-                        key={choice}
-                        type="button"
-                        className="ghost-button"
-                        onClick={() =>
-                          attemptMove(
-                            pendingPromotion.from,
-                            pendingPromotion.to,
-                            choice,
-                          )
-                        }
-                      >
-                        <ChessPiece
-                          piece={pieceCode}
-                          pieceStyle={pieceStyle}
-                          className="promotion-piece"
-                        />
-                        {PIECE_LABELS[pieceCode]}
-                      </button>
-                    );
-                  })}
-                </div>
-                <button
-                  type="button"
-                  className="text-button"
-                  onClick={() => setPendingPromotion(null)}
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          ) : null}
-        </section>
+        <BoardPanel
+          mode={mode}
+          boardStyle={boardStyle}
+          boardRows={boardRows}
+          boardState={boardState}
+          selectedSquare={selectedSquare}
+          legalTargets={legalTargets}
+          lastMove={lastMove}
+          pieceStyle={pieceStyle}
+          topCaptureColor={topCaptureColor}
+          bottomCaptureColor={bottomCaptureColor}
+          capturedPieces={capturedPieces}
+          materialBalance={materialBalance}
+          captureAnimation={captureAnimation}
+          activeTurnColor={activeTurnColor}
+          activeTurnLabel={activeTurnLabel}
+          onSquareClick={handleSquareClick}
+          onDrop={handleDrop}
+          onDragStart={handleDragStart}
+          onDragEnd={() => setDragSquare(null)}
+          startNewGame={startNewGame}
+          handleUndo={handleUndo}
+          rewindToStart={rewindToStart}
+          copyCurrentBoardToFreePlay={copyCurrentBoardToFreePlay}
+          onFlipBoard={() =>
+            setOrientation((current) => (current === 'w' ? 'b' : 'w'))
+          }
+          isOnlineControlsLocked={onlineControlsLocked}
+          isFreePlayMode={isFreePlayMode}
+          pendingPromotion={pendingPromotion}
+          promotionTurnColor={chess.turn()}
+          onPromotionChoice={(from, to, choice) =>
+            attemptMove(from, to, choice)
+          }
+          onCancelPromotion={() => setPendingPromotion(null)}
+        />
 
         <section className="side-panel">
-          <article className="card">
-            <div className="section-heading">
-              <div>
-                <h2>Online Play</h2>
-                <p>Host a room or join a friend with Supabase realtime sync.</p>
-              </div>
-              <span
-                className={[
-                  'status-badge',
-                  isOnlineBusy
-                    ? 'pending'
-                    : isOnlineConnected
-                      ? onlineState.status === 'finished'
-                        ? 'local'
-                        : onlineState.status === 'waiting'
-                        ? 'waiting'
-                        : 'live'
-                      : 'local',
-                ].join(' ')}
-              >
-                {isOnlineBusy
-                  ? 'Connecting'
-                  : isOnlineConnected
-                    ? onlineState.status === 'finished'
-                      ? 'Finished'
-                      : onlineState.status === 'waiting'
-                      ? 'Waiting'
-                      : 'Live'
-                    : 'Local'}
-              </span>
-            </div>
+          <OnlinePlayCard
+            isOnlineBusy={isOnlineBusy}
+            isOnlineConnected={isOnlineConnected}
+            onlineState={onlineState}
+            onlineStatusLabel={onlineStatusLabel}
+            preferredHostColor={preferredHostColor}
+            orientation={orientation}
+            onChooseHostColor={setManualHostColor}
+            hostOnlineGame={hostOnlineGame}
+            mode={mode}
+            roomCodeInput={roomCodeInput}
+            onRoomCodeInputChange={handleRoomCodeInputChange}
+            joinOnlineGame={() => joinOnlineGame()}
+            copyInviteLink={copyInviteLink}
+            leaveOnlineGame={() => leaveOnlineGame()}
+            message={message}
+            authError={authState.error}
+          />
 
-            <div className="customize-summary">
-              <span className="board-chip">{onlineStatusLabel}</span>
-              {onlineState.playerColor ? (
-                <span className="board-chip">
-                  {formatSeatLabel(onlineState.playerColor)} seat
-                </span>
-              ) : null}
-            </div>
+          <ModeCard
+            mode={mode}
+            canUseFreePlay={canUseFreePlay}
+            setMode={setMode}
+            moveList={moveList}
+            pieceStyle={pieceStyle}
+            palettePieces={PALETTE_PIECES}
+            selectedPalettePiece={selectedPalettePiece}
+            isFreePlayPaletteArmed={isFreePlayPaletteArmed}
+            handlePaletteSelect={handlePaletteSelect}
+            freePlayState={freePlayState}
+            resetFreePlayToStandard={resetFreePlayToStandard}
+            clearFreePlayBoard={clearFreePlayBoard}
+            toggleFreePlayTurn={toggleFreePlayTurn}
+            startGameFromFreePlay={startGameFromFreePlay}
+            freePlayValidation={freePlayValidation}
+            freePlayUndoLimit={FREE_PLAY_UNDO_LIMIT}
+            onArmMovePieces={armFreePlayMoveMode}
+          />
 
-            <div className="online-panel">
-              <div className="host-seat-panel">
-                <span className="hint">
-                  Host seat defaults to the current board side.
-                </span>
-                <div className="seat-toggle" role="group" aria-label="Host color">
-                  <button
-                    type="button"
-                    className={
-                      preferredHostColor === 'w'
-                        ? 'customize-tab active'
-                        : 'customize-tab'
-                    }
-                    onClick={() =>
-                      setManualHostColor(orientation === 'w' ? null : 'w')
-                    }
-                    disabled={isOnlineBusy || isOnlineConnected}
-                  >
-                    Host as White
-                  </button>
-                  <button
-                    type="button"
-                    className={
-                      preferredHostColor === 'b'
-                        ? 'customize-tab active'
-                        : 'customize-tab'
-                    }
-                    onClick={() =>
-                      setManualHostColor(orientation === 'b' ? null : 'b')
-                    }
-                    disabled={isOnlineBusy || isOnlineConnected}
-                  >
-                    Host as Black
-                  </button>
-                </div>
-              </div>
+          <CustomizeCard
+            isCustomizeOpen={isCustomizeOpen}
+            toggleCustomizeOpen={() =>
+              setIsCustomizeOpen((current) => !current)
+            }
+            customizeTab={customizeTab}
+            setCustomizeTab={setCustomizeTab}
+            activeBoardStyleLabel={activeBoardStyleLabel}
+            activePieceStyleLabel={activePieceStyleLabel}
+            boardStyle={boardStyle}
+            setBoardStyle={setBoardStyle}
+            pieceStyle={pieceStyle}
+            setPieceStyle={setPieceStyle}
+          />
 
-              <button
-                type="button"
-                className="primary-button"
-                onClick={hostOnlineGame}
-                disabled={mode !== 'game' || isOnlineBusy}
-              >
-                Host Online Game
-              </button>
-
-              <div className="join-room-row">
-                <input
-                  type="text"
-                  inputMode="text"
-                  autoCapitalize="characters"
-                  value={roomCodeInput}
-                  onChange={(event) =>
-                    setRoomCodeInput(normalizeRoomCode(event.target.value))
-                  }
-                  placeholder="Room code"
-                  disabled={isOnlineBusy}
-                />
-                <button
-                  type="button"
-                  className="ghost-button"
-                  onClick={() => joinOnlineGame()}
-                  disabled={isOnlineBusy}
-                >
-                  Join Room
-                </button>
-              </div>
-
-              {isOnlineConnected ? (
-                <div className="online-room-card">
-                  <div>
-                    <strong>Room {onlineState.roomCode}</strong>
-                    <p>
-                      {onlineState.status === 'finished'
-                        ? 'Game finished. The room remains available for review.'
-                        : onlineState.status === 'waiting'
-                        ? `Waiting for the ${
-                            onlineState.playerColor === 'w' ? 'Black' : 'White'
-                          } side to join.`
-                        : `Synced live as ${formatSeatLabel(onlineState.playerColor)}.`}
-                    </p>
-                  </div>
-                  <div className="save-actions">
-                    <button
-                      type="button"
-                      className="ghost-button"
-                      onClick={copyInviteLink}
-                    >
-                      Copy Invite Link
-                    </button>
-                    <button
-                      type="button"
-                      className="text-button"
-                      onClick={() => leaveOnlineGame()}
-                    >
-                      Leave Room
-                    </button>
-                  </div>
-                </div>
-              ) : null}
-
-              <p className={authState.error ? 'hint warning' : 'hint'}>
-                {authState.error || message}
-              </p>
-            </div>
-          </article>
-
-          <article className="card">
-            <div className="section-heading">
-              <h2>Mode</h2>
-              <p>Switch between legal play and unrestricted free play.</p>
-            </div>
-            <div className="mode-switch">
-              <button
-                type="button"
-                className={mode === 'game' ? 'primary-button' : 'ghost-button'}
-                onClick={() => setMode('game')}
-              >
-                Game
-              </button>
-              <button
-                type="button"
-                className={mode === 'freeplay' ? 'primary-button' : 'ghost-button'}
-                onClick={() => setMode('freeplay')}
-                disabled={!canUseFreePlay}
-              >
-                Free Play
-              </button>
-            </div>
-
-            {isFreePlayMode ? (
-              <>
-                <div className="editor-palette">
-                  {PALETTE_PIECES.map((piece) => (
-                    <button
-                      key={piece}
-                      type="button"
-                      className={
-                        selectedPalettePiece === piece && isFreePlayPaletteArmed
-                          ? 'palette-button active'
-                          : 'palette-button'
-                      }
-                      onClick={() => handlePaletteSelect(piece)}
-                    >
-                      <span className="palette-symbol">
-                        {piece === 'erase' ? (
-                          <span className="erase-symbol">×</span>
-                        ) : (
-                          <ChessPiece
-                            piece={piece}
-                            pieceStyle={pieceStyle}
-                            className="palette-piece"
-                          />
-                        )}
-                      </span>
-                      <span>{PIECE_LABELS[piece]}</span>
-                    </button>
-                  ))}
-                </div>
-
-                <div className="editor-controls">
-                  <button
-                    type="button"
-                    className={
-                      isFreePlayPaletteArmed ? 'ghost-button' : 'primary-button'
-                    }
-                    onClick={() => {
-                      setIsFreePlayPaletteArmed(false);
-                      setMessage(
-                        'Free play move mode armed. Drag a piece anywhere or click one and choose a square.',
-                      );
-                    }}
-                  >
-                    Move Pieces
-                  </button>
-                  <button
-                    type="button"
-                    className="ghost-button"
-                    onClick={toggleFreePlayTurn}
-                  >
-                    Side To Move: {freePlayState.turn === 'w' ? 'White' : 'Black'}
-                  </button>
-                  <button
-                    type="button"
-                    className="ghost-button"
-                    onClick={resetFreePlayToStandard}
-                  >
-                    Reset Free Play
-                  </button>
-                  <button
-                    type="button"
-                    className="ghost-button"
-                    onClick={clearFreePlayBoard}
-                  >
-                    Clear Board
-                  </button>
-                  <button
-                    type="button"
-                    className="primary-button"
-                    onClick={startGameFromFreePlay}
-                  >
-                    Start Game From Free Play
-                  </button>
-                </div>
-                <p className="hint">
-                  {isFreePlayPaletteArmed
-                    ? selectedPalettePiece === 'erase'
-                      ? 'Click any square to clear it, or switch back to Move Pieces.'
-                      : `Click any square to place ${PIECE_LABELS[
-                          selectedPalettePiece
-                        ].toLowerCase()}, or switch back to Move Pieces.`
-                    : `Drag any piece anywhere, or click one piece and then another square. Dropping on an occupied square removes the piece already there. The last ${FREE_PLAY_UNDO_LIMIT} free-play actions can be undone.`}
-                </p>
-                <p className={freePlayValidation.valid ? 'hint ok' : 'hint warning'}>
-                  {freePlayValidation.valid
-                    ? `Position is ready for game mode with ${
-                        freePlayState.turn === 'w' ? 'White' : 'Black'
-                      } to move.`
-                    : freePlayValidation.message}
-                </p>
-              </>
-            ) : (
-              <div className="history-panel">
-                <h3>Move History</h3>
-                {moveList.length === 0 ? (
-                  <p className="hint">No moves yet.</p>
-                ) : (
-                  <ol className="history-list">
-                    {moveList.map((move, index) => (
-                      <li key={`${move}-${index}`}>{move}</li>
-                    ))}
-                  </ol>
-                )}
-              </div>
-            )}
-          </article>
-
-          <article className="card">
-            <div className="section-heading">
-              <div>
-                <h2>Customize</h2>
-                <p>Change board and piece styles only when needed.</p>
-              </div>
-              <button
-                type="button"
-                className="ghost-button"
-                onClick={() => setIsCustomizeOpen((current) => !current)}
-                aria-expanded={isCustomizeOpen}
-              >
-                {isCustomizeOpen ? 'Hide Styles' : 'Show Styles'}
-              </button>
-            </div>
-
-            <div className="customize-summary">
-              <span className="board-chip">{activeBoardStyleLabel} board</span>
-              <span className="board-chip">{activePieceStyleLabel} pieces</span>
-            </div>
-
-            {isCustomizeOpen ? (
-              <div className="customize-panel">
-                <div className="customize-tabs" role="tablist" aria-label="Style categories">
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={customizeTab === 'board'}
-                    className={
-                      customizeTab === 'board'
-                        ? 'customize-tab active'
-                        : 'customize-tab'
-                    }
-                    onClick={() => setCustomizeTab('board')}
-                  >
-                    Board
-                  </button>
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={customizeTab === 'pieces'}
-                    className={
-                      customizeTab === 'pieces'
-                        ? 'customize-tab active'
-                        : 'customize-tab'
-                    }
-                    onClick={() => setCustomizeTab('pieces')}
-                  >
-                    Pieces
-                  </button>
-                </div>
-
-                {customizeTab === 'board' ? (
-                  <div className="customize-grid" role="tabpanel">
-                    {BOARD_STYLE_OPTIONS.map((option) => (
-                      <button
-                        key={option.value}
-                        type="button"
-                        className={
-                          boardStyle === option.value
-                            ? 'customize-option board-option active'
-                            : 'customize-option board-option'
-                        }
-                        onClick={() => setBoardStyle(option.value)}
-                        title={option.description}
-                      >
-                        <span
-                          className={[
-                            'board-style-preview compact',
-                            `board-style-${option.value}`,
-                          ].join(' ')}
-                          aria-hidden="true"
-                        >
-                          <span className="board-style-preview-frame" />
-                        </span>
-                        <span className="customize-option-label">{option.label}</span>
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="customize-grid" role="tabpanel">
-                    {PIECE_STYLE_OPTIONS.map((option) => (
-                      <button
-                        key={option.value}
-                        type="button"
-                        className={
-                          pieceStyle === option.value
-                            ? 'customize-option piece-option active'
-                            : 'customize-option piece-option'
-                        }
-                        onClick={() => setPieceStyle(option.value)}
-                        title={option.description}
-                      >
-                        <span className="piece-style-preview compact" aria-hidden="true">
-                          <ChessPiece piece="wK" pieceStyle={option.value} />
-                          <ChessPiece piece="wQ" pieceStyle={option.value} />
-                          <ChessPiece piece="bN" pieceStyle={option.value} />
-                        </span>
-                        <span className="customize-option-label">{option.label}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ) : null}
-          </article>
-
-          <article className="card">
-            <div className="section-heading">
-              <h2>Save &amp; Load</h2>
-              <p>Store game or free-play snapshots on this device.</p>
-            </div>
-
-            <div className="save-form">
-              <input
-                type="text"
-                value={saveName}
-                onChange={(event) => setSaveName(event.target.value)}
-                placeholder={`Name this ${activeModeLabel.toLowerCase()}`}
-              />
-              <button
-                type="button"
-                className="primary-button"
-                onClick={saveCurrentSnapshot}
-              >
-                Save Current {activeModeLabel}
-              </button>
-            </div>
-
-            {savedItems.length === 0 ? (
-              <p className="hint">No local saves yet.</p>
-            ) : (
-              <div className="save-list">
-                {savedItems.map((item) => (
-                  <div key={item.id} className="save-item">
-                    <div>
-                      <strong>{item.name}</strong>
-                      <p>
-                        {(MODE_LABELS[item.type] ?? 'Game') + ' snapshot'}
-                        {' · '}
-                        {new Date(item.createdAt).toLocaleString()}
-                      </p>
-                    </div>
-                    <div className="save-actions">
-                      <button
-                        type="button"
-                        className="ghost-button"
-                        onClick={() => loadSave(item)}
-                        disabled={onlineControlsLocked}
-                      >
-                        Load
-                      </button>
-                      <button
-                        type="button"
-                        className="text-button"
-                        onClick={() => deleteSave(item.id)}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </article>
+          <SaveLoadCard
+            activeModeLabel={activeModeLabel}
+            saveName={saveName}
+            onSaveNameChange={setSaveName}
+            saveCurrentSnapshot={saveCurrentSnapshot}
+            savedItems={savedItems}
+            modeLabels={MODE_LABELS}
+            loadSave={loadSave}
+            onlineControlsLocked={onlineControlsLocked}
+            deleteSave={deleteSave}
+          />
         </section>
       </main>
     </div>

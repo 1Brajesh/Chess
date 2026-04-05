@@ -199,8 +199,20 @@ export function getLastMove(gameState) {
   return history.at(-1) ?? null;
 }
 
-export function getCapturedPieces(gameState) {
-  const history = buildChess(gameState).history({ verbose: true });
+function sortCapturedPieces(pieces) {
+  return [...pieces].sort((left, right) => {
+    const rankDifference =
+      CAPTURE_DISPLAY_ORDER[left[1]] - CAPTURE_DISPLAY_ORDER[right[1]];
+
+    if (rankDifference !== 0) {
+      return rankDifference;
+    }
+
+    return left.localeCompare(right);
+  });
+}
+
+export function getCapturedPiecesFromHistory(history) {
   const capturedPieces = {
     w: [],
     b: [],
@@ -217,22 +229,16 @@ export function getCapturedPieces(gameState) {
     );
   }
 
-  const sortPieces = (pieces) =>
-    [...pieces].sort((left, right) => {
-      const rankDifference =
-        CAPTURE_DISPLAY_ORDER[left[1]] - CAPTURE_DISPLAY_ORDER[right[1]];
-
-      if (rankDifference !== 0) {
-        return rankDifference;
-      }
-
-      return left.localeCompare(right);
-    });
-
   return {
-    w: sortPieces(capturedPieces.w),
-    b: sortPieces(capturedPieces.b),
+    w: sortCapturedPieces(capturedPieces.w),
+    b: sortCapturedPieces(capturedPieces.b),
   };
+}
+
+export function getCapturedPieces(gameState) {
+  return getCapturedPiecesFromHistory(
+    buildChess(gameState).history({ verbose: true }),
+  );
 }
 
 export function getMaterialBalance(capturedPieces) {
