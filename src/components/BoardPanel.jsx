@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import { PIECE_LABELS, isLightSquare } from '../lib/chess.js';
 import ChessPiece from './ChessPiece.jsx';
 
@@ -95,6 +96,49 @@ export default function BoardPanel({
   onPromotionChoice,
   onCancelPromotion,
 }) {
+  const dragPreviewRef = useRef(null);
+
+  function clearDragPreview() {
+    dragPreviewRef.current?.remove();
+    dragPreviewRef.current = null;
+  }
+
+  function prepareFreePlayDragPreview(event) {
+    if (mode !== 'freeplay' || typeof document === 'undefined') {
+      return;
+    }
+
+    const pieceElement = event.currentTarget.querySelector('.piece-render');
+
+    if (!pieceElement || !event.dataTransfer) {
+      return;
+    }
+
+    clearDragPreview();
+
+    const pieceRect = pieceElement.getBoundingClientRect();
+    const preview = document.createElement('div');
+    const previewPiece = pieceElement.cloneNode(true);
+
+    preview.className = 'drag-piece-preview';
+    preview.style.width = `${pieceRect.width}px`;
+    preview.style.height = `${pieceRect.height}px`;
+    preview.append(previewPiece);
+    document.body.append(preview);
+    dragPreviewRef.current = preview;
+
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData(
+      'text/plain',
+      event.currentTarget.getAttribute('aria-label') ?? '',
+    );
+    event.dataTransfer.setDragImage(
+      preview,
+      pieceRect.width / 2,
+      pieceRect.height / 2,
+    );
+  }
+
   return (
     <section className="board-panel card">
       <div className="board-stage">
@@ -155,12 +199,21 @@ export default function BoardPanel({
                           .join(' ')}
                         onClick={() => onSquareClick(square)}
                         onDragOver={(event) => event.preventDefault()}
-                        onDrop={() => onDrop(square)}
+                        onDrop={() => {
+                          clearDragPreview();
+                          onDrop(square);
+                        }}
                         draggable={
                           (mode === 'game' || mode === 'freeplay') && Boolean(piece)
                         }
-                        onDragStart={() => onDragStart(square)}
-                        onDragEnd={onDragEnd}
+                        onDragStart={(event) => {
+                          prepareFreePlayDragPreview(event);
+                          onDragStart(square);
+                        }}
+                        onDragEnd={() => {
+                          clearDragPreview();
+                          onDragEnd();
+                        }}
                         aria-label={`${square} ${
                           visiblePiece ? PIECE_LABELS[visiblePiece] : 'empty square'
                         }`}
