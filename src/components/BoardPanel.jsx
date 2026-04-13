@@ -68,6 +68,7 @@ export default function BoardPanel({
   boardRows,
   boardState,
   selectedSquare,
+  dragSquare,
   legalTargets,
   lastMove,
   pieceStyle,
@@ -127,6 +128,8 @@ export default function BoardPanel({
                 {boardRows.map((row, rowIndex) =>
                   row.map((square, columnIndex) => {
                     const piece = boardState.position[square];
+                    const visiblePiece =
+                      mode === 'freeplay' && dragSquare === square ? null : piece;
                     const isSelected = selectedSquare === square;
                     const isTarget = legalTargets.includes(square);
                     const isLastMoveSquare =
@@ -159,7 +162,7 @@ export default function BoardPanel({
                         onDragStart={() => onDragStart(square)}
                         onDragEnd={onDragEnd}
                         aria-label={`${square} ${
-                          piece ? PIECE_LABELS[piece] : 'empty square'
+                          visiblePiece ? PIECE_LABELS[visiblePiece] : 'empty square'
                         }`}
                       >
                         {rankLabel ? (
@@ -168,8 +171,11 @@ export default function BoardPanel({
                         {fileLabel ? (
                           <span className="square-file">{fileLabel}</span>
                         ) : null}
-                        {piece ? (
-                          <ChessPiece piece={piece} pieceStyle={pieceStyle} />
+                        {visiblePiece ? (
+                          <ChessPiece
+                            piece={visiblePiece}
+                            pieceStyle={pieceStyle}
+                          />
                         ) : null}
                       </button>
                     );

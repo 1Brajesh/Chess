@@ -1248,6 +1248,7 @@ export default function App() {
           boardRows={boardRows}
           boardState={boardState}
           selectedSquare={selectedSquare}
+          dragSquare={dragSquare}
           legalTargets={legalTargets}
           lastMove={lastMove}
           pieceStyle={pieceStyle}
